@@ -4,8 +4,8 @@ import argparse
 import dataclasses
 import pathlib
 import sys
+from collections.abc import Sequence
 from typing import Any
-from typing import Sequence
 
 import jinja2
 
@@ -85,7 +85,8 @@ def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
             f'got {len(args.template)} --template and {len(args.output)} '
             '--output arguments; each template needs exactly one output'
         )
-    return list(zip(args.template, args.output))
+    # The lengths are equal by the check above.
+    return list(zip(args.template, args.output, strict=True))
 
 
 def enrich(
@@ -153,7 +154,7 @@ def run(args: argparse.Namespace) -> int:
     }
 
     ok = True
-    for (_, output), (_, name) in zip(pairs, specs):
+    for (_, output), (_, name) in zip(pairs, specs, strict=True):
         template = env.get_template(name)
         content = rendering.render_document(template, context)
         ok &= write_output(pathlib.Path(output), content, args.check)

@@ -10,7 +10,7 @@ contain an '@' never breaks a documentation build.
 import dataclasses
 import enum
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 from . import tag_lexer
 from .errors import ParseError
@@ -165,7 +165,5 @@ class Parser:
         self._required = False
 
 
-def parse(
-    tokens: Sequence[tag_lexer.Tag | str], *, strict: bool = False
-) -> DocComment:
+def parse(tokens: Sequence[tag_lexer.Tag | str], *, strict: bool = False) -> DocComment:
     return Parser(tokens, strict=strict).parse()

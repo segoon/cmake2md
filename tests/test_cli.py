@@ -4,7 +4,7 @@ import pytest
 
 from cmake2md import cli
 
-TEMPLATE = '''\
+TEMPLATE = """\
 {% for symbol in symbols %}
 {{ symbol.pretty }}
 {% endfor %}
@@ -13,7 +13,7 @@ TEMPLATE = '''\
 {%- for cmd in commands | only_command('option') %}
 | {{ cmd.args[0] }} | {{ cmd.group }} |
 {%- endfor %}
-'''
+"""
 
 
 @pytest.fixture
@@ -62,8 +62,7 @@ def test_multiple_template_output_pairs(cmake_file, template, tmp_path):
     first = tmp_path / 'a.md'
     second = tmp_path / 'b.md'
     assert (
-        run('-t', template, '-o', first, '-t', template, '-o', second, cmake_file)
-        == 0
+        run('-t', template, '-o', first, '-t', template, '-o', second, cmake_file) == 0
     )
     assert first.read_text(encoding='utf-8') == second.read_text(encoding='utf-8')
 

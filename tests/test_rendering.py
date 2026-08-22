@@ -22,7 +22,7 @@ def test_oneline_joins_continuations():
 
 
 def test_only_command_and_only_group():
-    items = [
+    items: list[rendering.Item] = [
         {'name': 'option', 'group': 'build'},
         {'name': 'option', 'group': None},
         {'name': 'set', 'group': 'build'},

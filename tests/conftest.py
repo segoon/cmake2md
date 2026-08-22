@@ -1,6 +1,6 @@
 import pytest
 
-CMAKE_SOURCE = '''\
+CMAKE_SOURCE = """\
 # This comment is separated by a blank line and must not be picked up.
 
 # @ingroup build
@@ -22,7 +22,7 @@ endfunction()
 
 function(undocumented_function)
 endfunction()
-'''
+"""
 
 
 @pytest.fixture

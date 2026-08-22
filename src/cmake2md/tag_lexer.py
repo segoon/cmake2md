@@ -7,7 +7,7 @@ exist; that is :mod:`cmake2md.doc_parser`'s job.
 
 import dataclasses
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 # A tag name is an identifier: this deliberately includes '_' and digits so
 # that '@param_x' lexes as one tag rather than '@param' followed by '_x'.

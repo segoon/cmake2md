@@ -2,9 +2,9 @@
 
 import pathlib
 import re
+from collections.abc import Iterable
+from collections.abc import Sequence
 from typing import Any
-from typing import Iterable
-from typing import Sequence
 
 import jinja2
 
@@ -13,6 +13,10 @@ import jinja2
 FUNCTION_TEMPLATE_NAME = 'function.md.jinja'
 
 _FENCE_RE = re.compile(r'^```.*?^```', re.MULTILINE | re.DOTALL)
+
+#: One entry of the `symbols` or `commands` list a template is rendered with,
+#: as built by `cli.enrich`.
+Item = dict[str, Any]
 
 
 def unquote(s: str) -> str:
@@ -37,15 +41,15 @@ def oneline(s: str) -> str:
     return s.replace('\\\n', ' ')
 
 
-def render(collection: Iterable[dict]) -> str:
+def render(collection: Iterable[Item]) -> str:
     return ''.join(item['pretty'] + '\n' for item in collection)
 
 
-def only_command(collection: Iterable[dict], name: str) -> list[dict]:
+def only_command(collection: Iterable[Item], name: str) -> list[Item]:
     return [item for item in collection if item['name'] == name]
 
 
-def only_group(collection: Iterable[dict], name: str | None) -> list[dict]:
+def only_group(collection: Iterable[Item], name: str | None) -> list[Item]:
     return [item for item in collection if item.get('group') == name]
 
 
@@ -90,10 +94,12 @@ def resolve_template_spec(spec: str) -> tuple[pathlib.Path | None, str]:
 
 
 def build_environment(search_dirs: Sequence[pathlib.Path]) -> jinja2.Environment:
-    loader = jinja2.ChoiceLoader([
-        jinja2.FileSystemLoader([str(d) for d in search_dirs]),
-        jinja2.PackageLoader('cmake2md', 'templates'),
-    ])
+    loader = jinja2.ChoiceLoader(
+        [
+            jinja2.FileSystemLoader([str(d) for d in search_dirs]),
+            jinja2.PackageLoader('cmake2md', 'templates'),
+        ]
+    )
     env = jinja2.Environment(
         loader=loader,
         autoescape=False,

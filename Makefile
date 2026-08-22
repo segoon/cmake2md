@@ -1,4 +1,9 @@
-PYTHON ?= python3
+VENV ?= .venv
+VENV_PYTHON := $(VENV)/bin/python
+
+# Development happens in the venv; fall back to the system interpreter so that
+# `make venv` (and a `PYTHON=... make` override) still work without one.
+PYTHON ?= $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),python3)
 
 EXAMPLE_TEMPLATE := examples/reference.md.jinja
 EXAMPLE_SOURCE := examples/CMakeLists.txt
@@ -10,6 +15,11 @@ EXAMPLE_OUTPUT := examples/reference.md
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: venv
+venv: ## Create the development venv at $(VENV)
+	python3 -m venv $(VENV)
+	$(VENV_PYTHON) -m pip install -e '.[dev]'
 
 .PHONY: install
 install: ## Install the package and the development tools

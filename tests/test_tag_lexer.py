@@ -38,9 +38,7 @@ def test_bare_at_sign_is_literal():
 
 
 def test_double_at_is_an_escaped_literal():
-    assert tag_lexer.tokenize(['a literal @@param sign']) == [
-        'a literal @param sign'
-    ]
+    assert tag_lexer.tokenize(['a literal @@param sign']) == ['a literal @param sign']
 
 
 def test_adjacent_tags():
