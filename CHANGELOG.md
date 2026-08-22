@@ -4,6 +4,17 @@
 
 ### Added
 
+- Seven tags: `@brief`, `@example`, `@note`, `@warning`, `@since`, `@todo`
+  and `@see`. A prose tag holds one paragraph and ends at a blank line, as
+  Doxygen's does; `@example` holds a block, so the blank lines inside a sample
+  survive. They arrive as `doc.brief` and `doc.sections`, which
+  `doc.of_kind('note')` selects from, and the built-in template renders them.
+- `@example` is checked to parse as CMake — the closest a build language gets
+  to rustdoc's doc tests. A sample in a fence naming another language is left
+  alone.
+- `@internal` marks a symbol as not part of the public interface, and the new
+  `public` filter drops those. It gives a private helper a way to be hidden
+  deliberately rather than by the accident of having no comment.
 - `variables`, a third list templates are rendered with: every cache entry a
   user can set, from `option()` and from `set(... CACHE ...)`, parsed into
   `name`, `type_`, `default`, `docstring` and `choices`. A template no longer

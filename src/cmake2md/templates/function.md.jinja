@@ -11,12 +11,29 @@
 {%- if not r %}]{% endif %}
 {%- endmacro -%}
 
+{#
+  A @note or a @warning stands out as a blockquote; every line of it needs the
+  marker, hence the replace().
+#}
+{% macro quoted(label, text) %}
+> **{{ label }}** {{ text | replace('\n', '\n> ') }}
+{% endmacro %}
+
+{% macro sections(doc, kind, label) %}
+{%- for section in doc.of_kind(kind) %}
+{{ quoted(label, section.text) }}
+{%- endfor %}
+{%- endmacro %}
+
 {% macro function(symbol) %}
 {%- set has_params = symbol.doc.args or symbol.doc.options
                      or symbol.doc.params or symbol.doc.multi_params %}
 ## {{ symbol.name }}
 {% if symbol.doc.deprecated %}
 **Deprecated.**
+{% endif %}
+{%- if symbol.doc.brief %}
+{{ symbol.doc.brief }}
 {% endif %}
 {{ symbol.doc.description }}
 
@@ -55,12 +72,27 @@ Sets in the caller's scope:
 * **{{ arg.name }}** {{ arg.description }}
 {%- endfor %}
 {%- endif %}
+{%- for example in symbol.doc.of_kind('example') %}
+
+{% if '```' in example.text %}{{ example.text }}{% else %}```cmake
+{{ example.text }}
+```{% endif %}
+{%- endfor %}
+{{ sections(symbol.doc, 'note', 'Note:') }}
+{{- sections(symbol.doc, 'warning', 'Warning:') }}
+{{- sections(symbol.doc, 'todo', 'TODO:') }}
+{%- for section in symbol.doc.of_kind('since') %}
+*Since {{ section.text }}.*
+{% endfor %}
+{%- if symbol.doc.of_kind('see') %}
+See also: {{ symbol.doc.of_kind('see') | map(attribute='text') | join(', ') }}
+{% endif %}
 {%- endmacro -%}
 
 {% if symbol is defined %}
 {{- function(symbol) }}
 {%- else %}
-{%- for symbol in symbols | documented %}
+{%- for symbol in symbols | documented | public %}
 {{ function(symbol) }}
 {%- endfor %}
 {%- endif %}

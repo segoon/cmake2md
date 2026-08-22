@@ -54,6 +54,23 @@ def test_documented_keeps_only_commented_items():
     assert rendering.documented(items) == [items[0]]
 
 
+def test_public_drops_internal_entries():
+    from cmake2md import doc_parser
+    from cmake2md import tag_lexer
+
+    def doc(*lines):
+        return doc_parser.parse(tag_lexer.tokenize(list(lines)))
+
+    items: list[rendering.Item] = [
+        {'name': 'a', 'doc': doc(' public')},
+        {'name': 'b', 'doc': doc(' private', ' @internal')},
+        {'name': 'c'},
+    ]
+    # An entry with no parsed comment at all is left in: only an explicit
+    # @internal takes something out.
+    assert rendering.public(items) == [items[0], items[2]]
+
+
 def test_collapse_blank_lines():
     assert rendering.collapse_blank_lines('a\n\n\n\n\nb') == 'a\n\n\nb'
     assert rendering.collapse_blank_lines('a\n\nb') == 'a\n\nb'

@@ -32,21 +32,21 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## P3 — Tag vocabulary
 
-Each is a `TAG_SPECS` entry plus a `Parser._handle_tag` branch; `TagSpec`
-needs a "takes text to the end of the line" vs "takes a paragraph" distinction
-first, as Doxygen has.
+`TagSpec` now carries a `TagText` mode, so a tag that only holds prose needs a
+`TAG_SPECS` entry and nothing else.
 
-- `@brief` — a summary distinct from the body, for index tables
-- `@example` — with the snippet checked to parse as CMake, which is as close
-  to rustdoc's doc tests as CMake allows
-- `@see`, plus stable anchors and auto-linking of symbol names
-- `@since`, `@note`, `@warning`, `@todo`
-- `@internal` — hide a private helper deliberately rather than by the accident
-  of it having no comment
-- `@defgroup NAME <title>` with a description and an ordering, so
-  `examples/reference.md.jinja` stops hardcoding the group names
-- parameter types and default values
-- file-level documentation (`@file`)
+- [x] `@brief` — a summary distinct from the body, for index tables
+- [x] `@example`, with the snippet checked to parse as CMake, which is as
+      close to rustdoc's doc tests as CMake allows
+- [x] `@since`, `@note`, `@warning`, `@todo`, `@see`
+- [x] `@internal` — hide a private helper deliberately rather than by the
+      accident of it having no comment
+- [ ] stable anchors and auto-linking of symbol names, so `@see` becomes a
+      link rather than a name
+- [ ] `@defgroup NAME <title>` with a description and an ordering, so
+      `examples/reference.md.jinja` stops hardcoding the group names
+- [ ] parameter types and default values
+- [ ] file-level documentation (`@file`)
 
 ## P4 — Output and CI integration
 

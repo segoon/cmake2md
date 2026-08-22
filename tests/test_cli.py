@@ -208,6 +208,40 @@ def test_strict_rejects_documentation_disagreeing_with_the_code(
     assert 'SRCS is documented as @multiparam' in capsys.readouterr().err
 
 
+SECTIONED_SOURCE = """\
+# @brief Adds a thing.
+#
+# The longer description.
+#
+# @note Call it early.
+# @example
+# add_thing(NAME x)
+function(add_thing)
+endfunction()
+
+# A helper nobody outside should call.
+#
+# @internal
+function(_helper)
+endfunction()
+"""
+
+
+def test_builtin_template_renders_the_new_sections(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(SECTIONED_SOURCE, encoding='utf-8')
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert 'Adds a thing.' in text
+    assert 'The longer description.' in text
+    assert '> **Note:** Call it early.' in text
+    assert '```cmake\nadd_thing(NAME x)\n```' in text
+    # @internal keeps a documented helper out of the public reference.
+    assert '_helper' not in text
+
+
 def test_variables_reach_templates_already_parsed(cmake_file, tmp_path):
     var_template = tmp_path / 'vars.md.jinja'
     var_template.write_text(

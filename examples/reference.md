@@ -26,6 +26,18 @@ example_add_library(
 * **SOURCES <value>...** the source files to compile
 * **DEPENDS <value>...** targets this library links against
 
+
+```cmake
+example_add_library(
+    NAME example_core
+    OUTPUT_NAME core
+    SOURCES src/a.cpp src/b.cpp
+)
+```
+
+
+> **Note:** Call this after project(), so that the compiler is known.
+
 ## example_add_test
 
 **Deprecated.**

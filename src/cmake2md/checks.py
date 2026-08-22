@@ -4,12 +4,22 @@ Documentation that merely restates the code drifts away from it; these checks
 are what turns the restatement into something the build can verify.  They stay
 silent about anything :mod:`cmake2md.signature` could not read, so a warning
 here always means a real disagreement.
+
+The same idea applies to an ``@example``: the sample is CMake, so it can be
+parsed, which is as close to rustdoc's doc tests as a build language gets.
 """
+
+import re
 
 from . import parse
 from .doc_parser import DocComment
 from .doc_parser import DocWarning
 from .doc_parser import ParamKind
+
+#: A fenced code block, capturing the language it declares and its body.
+_FENCE_RE = re.compile(r'^```(\w*)[ \t]*\n(.*?)^```', re.MULTILINE | re.DOTALL)
+#: Fence languages whose body is CMake and so worth parsing.
+_CMAKE_FENCES = frozenset({'', 'cmake'})
 
 
 def tag(kind: ParamKind) -> str:
@@ -27,17 +37,43 @@ def does_not(kind: ParamKind) -> str:
 
 
 def check(item: parse.Documented, doc: DocComment) -> list[DocWarning]:
-    """Report where `doc` disagrees with the code of `item`.
+    """Report where `doc` disagrees with the code it documents.
 
-    An item that is not documented at all is left alone: it is not drifting,
-    it is simply undocumented, which is a separate question.
+    An item whose parameters are not documented at all is left alone: it is
+    not drifting, it is simply undocumented, which is a separate question.
     """
-    if not isinstance(item, parse.Symbol) or not doc.all_params():
-        return []
+    warnings = _broken_examples(doc)
+    if isinstance(item, parse.Symbol) and doc.all_params():
+        warnings += _duplicate_params(doc)
+        warnings += _params_the_code_denies(item, doc)
+        warnings += _params_the_comment_omits(item, doc)
+    return warnings
 
-    warnings = _duplicate_params(doc)
-    warnings += _params_the_code_denies(item, doc)
-    warnings += _params_the_comment_omits(item, doc)
+
+def cmake_snippets(text: str) -> list[str]:
+    """The parts of `text` that claim to be CMake.
+
+    An @example is CMake unless it says otherwise, which it does by fencing
+    the sample and naming another language.
+    """
+    fences = _FENCE_RE.findall(text)
+    if not fences:
+        return [text]
+    return [body for language, body in fences if language in _CMAKE_FENCES]
+
+
+def _broken_examples(doc: DocComment) -> list[DocWarning]:
+    warnings = []
+    for section in doc.of_kind('example'):
+        for snippet in cmake_snippets(section.text):
+            if parse.PARSER.parse(snippet.encode()).root_node.has_error:
+                warnings.append(
+                    DocWarning(
+                        'the @example does not parse as CMake; put prose or '
+                        'another language in a fenced code block',
+                        section.line,
+                    )
+                )
     return warnings
 
 

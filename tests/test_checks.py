@@ -108,6 +108,39 @@ def test_an_undocumented_output_variable_is_reported(messages):
     ]
 
 
+EXAMPLE = '# Adds a thing.\n#\n# @example\n{body}function(f)\nendfunction()\n'
+
+
+def example(*lines):
+    return EXAMPLE.format(body=''.join(f'# {line}\n' for line in lines))
+
+
+def test_an_example_that_parses_as_cmake_is_silent(messages):
+    assert messages(example('f(NAME x)', 'g()')) == []
+
+
+def test_an_example_that_is_not_cmake_is_reported(messages):
+    assert messages(example('Call it with a name and some sources.')) == [
+        'the @example does not parse as CMake; put prose or another language '
+        'in a fenced code block'
+    ]
+
+
+def test_a_fenced_cmake_example_is_checked(messages):
+    assert messages(example('```cmake', 'f(NAME', '```')) == [
+        'the @example does not parse as CMake; put prose or another language '
+        'in a fenced code block'
+    ]
+
+
+def test_a_fence_naming_another_language_is_left_alone(messages):
+    assert messages(example('```sh', 'cmake -DFOO=ON ..', '```')) == []
+
+
+def test_a_symbol_without_an_example_is_not_checked(messages):
+    assert messages('# Just prose.\nfunction(f)\nendfunction()\n') == []
+
+
 def test_a_kind_the_code_does_not_declare_is_left_alone(messages):
     # The macro takes its argument through ${ARGV0}, which declares nothing,
     # so @arg is the author's word against no evidence at all.

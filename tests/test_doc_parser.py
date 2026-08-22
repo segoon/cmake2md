@@ -67,6 +67,85 @@ def test_return_documents_an_output_variable():
     assert doc.returns[0].description == 'the computed value'
 
 
+def test_brief_is_the_summary_and_ends_at_a_blank_line():
+    doc = parse(
+        ' @brief Adds a library.',
+        '',
+        ' The longer story, which is not part of the brief.',
+    )
+    assert doc.brief == 'Adds a library.'
+    assert doc.description == 'The longer story, which is not part of the brief.'
+
+
+def test_brief_keeps_prose_written_before_it():
+    doc = parse(' Leading prose.', ' @brief The summary.')
+    assert doc.brief == 'The summary.'
+    assert doc.description == 'Leading prose.'
+
+
+def test_prose_sections_are_collected_in_order():
+    doc = parse(
+        ' Adds a library.',
+        ' @note Call it early.',
+        ' @warning Not thread safe.',
+        ' @since 1.2',
+        ' @todo support OBJECT libraries',
+        ' @see example_add_test',
+    )
+    assert [(s.kind, s.text) for s in doc.sections] == [
+        ('note', 'Call it early.'),
+        ('warning', 'Not thread safe.'),
+        ('since', '1.2'),
+        ('todo', 'support OBJECT libraries'),
+        ('see', 'example_add_test'),
+    ]
+    assert doc.description == 'Adds a library.'
+
+
+def test_of_kind_selects_sections():
+    doc = parse(' @note One.', ' @warning Careful.', ' @note Two.')
+    assert [s.text for s in doc.of_kind('note')] == ['One.', 'Two.']
+    assert doc.of_kind('nosuch') == []
+
+
+def test_a_prose_section_ends_at_a_blank_line():
+    doc = parse(' @note Call it early.', '', ' Back to the description.')
+    assert doc.of_kind('note')[0].text == 'Call it early.'
+    assert doc.description == 'Back to the description.'
+
+
+def test_an_example_keeps_its_blank_lines():
+    doc = parse(
+        ' @example',
+        ' f(A)',
+        '',
+        ' g(B)',
+        ' @note And a note.',
+    )
+    assert doc.of_kind('example')[0].text == 'f(A)\n\n g(B)'
+    assert doc.of_kind('note')[0].text == 'And a note.'
+
+
+def test_a_section_does_not_swallow_the_parameters_that_follow():
+    doc = parse(' @note Careful.', ' @param NAME the name')
+    assert doc.of_kind('note')[0].text == 'Careful.'
+    assert [(p.name, p.description) for p in doc.params] == [('NAME', 'the name')]
+
+
+def test_internal_is_a_symbol_level_flag():
+    assert not parse(' A helper.').internal
+    doc = parse(' A helper.', ' @internal')
+    assert doc.internal
+    assert doc.description == 'A helper.'
+
+
+def test_sections_carry_the_line_they_are_on():
+    doc = doc_parser.parse(
+        tag_lexer.tokenize([' first line', ' @note here']), first_line=40
+    )
+    assert doc.of_kind('note')[0].line == 41
+
+
 def test_ingroup():
     doc = parse(' @ingroup compilation')
     assert doc.group == 'compilation'

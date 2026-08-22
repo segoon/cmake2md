@@ -63,6 +63,15 @@ def documented(collection: Iterable[Item]) -> list[Item]:
     return [item for item in collection if any(c.strip() for c in item['comments'])]
 
 
+def public(collection: Iterable[Item]) -> list[Item]:
+    """Drop the entries their author marked @internal."""
+    return [
+        item
+        for item in collection
+        if not (item.get('doc') is not None and item['doc'].internal)
+    ]
+
+
 FILTERS = {
     'unquote': unquote,
     'escape': escape,
@@ -71,6 +80,7 @@ FILTERS = {
     'only_group': only_group,
     'only_command': only_command,
     'documented': documented,
+    'public': public,
     'render': render,
 }
 

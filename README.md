@@ -89,6 +89,20 @@ ignored, and a symbol documented that way reads as undocumented.
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
+| `@internal` | function, macro, command | Marks the symbol as not part of the public interface. The `public` filter drops it. |
+| `@brief` | anything | A one-paragraph summary, distinct from the description. |
+| `@example` | anything | A sample, held as a block so blank lines inside it survive. Checked to parse as CMake. |
+| `@note`, `@warning` | anything | A paragraph set apart from the description. |
+| `@since`, `@todo`, `@see` | anything | A paragraph each: a version, a task, a cross-reference. |
+
+A tag that carries prose — `@brief`, `@note`, `@warning`, `@since`, `@todo`,
+`@see` — ends at a blank line, as Doxygen's do, and what follows the blank
+line belongs to the description again. `@example` and the parameter tags run
+to the next tag instead, so a sample or a parameter description may span
+paragraphs.
+
+`doc.brief` is a plain string; the rest arrive as `doc.sections`, in the order
+they were written, and `doc.of_kind('note')` selects one kind of them.
 
 Text that is not part of a tag becomes the description: text before the first
 parameter tag describes the symbol, text after a parameter tag describes that
@@ -137,6 +151,10 @@ an output variable whose name the caller supplies
 (`set(${ARG_OUTPUT_VARIABLE} ... PARENT_SCOPE)`) all leave the matching tags
 unchecked. Symbols with no doc comment at all are not reported either.
 
+An `@example` is checked the same way: it is CMake, so cmake2md parses it and
+reports a sample that does not parse. Prose or another language belongs in a
+fenced code block, which is left alone unless it is fenced as `cmake`.
+
 `--strict` turns these warnings into errors as well.
 
 ### Adding a tag
@@ -165,7 +183,7 @@ Each entry is a dict with:
 | Key | Description |
 |-----|-------------|
 | `name` | Function, macro or command name. |
-| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.warnings`. |
+| `doc` | Parsed comment: `.description`, `.brief`, `.group`, `.deprecated`, `.internal`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.sections`, `.warnings`, and the `.of_kind(kind)` method. |
 | `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
@@ -182,7 +200,8 @@ Each entry is a dict with:
 
 Each parameter in `doc.args` / `doc.options` / `doc.params` /
 `doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
-`.kind` and `.line`.
+`.kind` and `.line`. Each entry of `doc.sections` has `.kind` — the tag that
+opened it, without the `@` — `.text` and `.line`.
 
 ### Build options
 
@@ -212,6 +231,7 @@ to configure, so it is not in the list; it is still in `commands`. A
 | `only_command(name)` | Keep only commands with the given name. |
 | `only_group(name)` | Keep only entries in the given `@ingroup` (use `None` for ungrouped). |
 | `documented` | Keep only entries that carry a doc comment. |
+| `public` | Drop the entries marked `@internal`. |
 | `render` | Concatenate the `pretty` field of a collection. |
 
 ### The built-in template

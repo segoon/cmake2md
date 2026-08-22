@@ -22,13 +22,13 @@
 
 ## Functions
 
-{% for symbol in symbols | documented if symbol.type_ == 'function' %}
+{% for symbol in symbols | documented | public if symbol.type_ == 'function' %}
 {{ symbol.pretty }}
 {% endfor %}
 
 ## Macros
 
-{% for symbol in symbols | documented if symbol.type_ == 'macro' %}
+{% for symbol in symbols | documented | public if symbol.type_ == 'macro' %}
 {{ symbol.pretty }}
 {% endfor %}
 

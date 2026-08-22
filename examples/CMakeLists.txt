@@ -28,10 +28,19 @@ option(EXAMPLE_STATIC "Link everything statically" OFF)
 # @ingroup paths
 set(EXAMPLE_TOOLCHAIN_DIR "/usr/local/toolchain" CACHE PATH "Toolchain location")
 
-# Adds a library target together with its tests and install rules.
+# @brief Adds a library target together with its tests and install rules.
 #
 # The description may safely contain an e-mail address such as
 # maintainer@example.com or a literal @@ sign.
+#
+# @note Call this after project(), so that the compiler is known.
+#
+# @example
+# example_add_library(
+#     NAME example_core
+#     OUTPUT_NAME core
+#     SOURCES src/a.cpp src/b.cpp
+# )
 #
 # @arg NAME the name of the resulting target
 # @option EXCLUDE_FROM_ALL do not build this target by default
