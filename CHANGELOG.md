@@ -4,6 +4,13 @@
 
 ### Added
 
+- `--json OUTPUT` writes the parsed model as JSON, under a `schema_version`
+  that is bumped only when a field disappears or changes meaning.
+- `--require-docs` fails the run on a public `function()` or `macro()` with no
+  doc comment, like rustdoc's `missing_docs`. A leading `_` and `@internal`
+  both mean private.
+- `--exclude PATTERN`, repeatable, and a `.cmake2mdignore` file listing more
+  of the same.
 - `@type` and `@default` refine the parameter written above them, as
   `@required` already did, and the built-in template prints them.
 - `@file`, in a comment block of its own, marks that block as documenting the
@@ -54,6 +61,8 @@
 
 ### Changed
 
+- `--check` prints a diff of what differs instead of only reporting that
+  something does.
 - `--strict` now promotes every documentation warning to an error, not only a
   doubtful `@tag`.
 

@@ -2,6 +2,8 @@
 
 import argparse
 import dataclasses
+import difflib
+import fnmatch
 import glob
 import pathlib
 import sys
@@ -15,6 +17,7 @@ from . import checks
 from . import doc_parser
 from . import parse
 from . import rendering
+from . import serialize
 from . import tag_lexer
 from .errors import Cmake2mdError
 from .errors import ParseError
@@ -24,6 +27,8 @@ from .errors import UsageError
 STDOUT = '-'
 #: What a directory given as CMAKE_FILE is searched for.
 SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
+#: File listing extra --exclude patterns, one per line, '#' starting a comment.
+IGNORE_FILE = '.cmake2mdignore'
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -66,6 +71,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[],
         metavar='DIR',
         help='Additional directory to search for templates. Repeatable.',
+    )
+    parser.add_argument(
+        '--json',
+        metavar='OUTPUT',
+        help=(
+            'Also write the parsed model as JSON, for tools that are not '
+            'templates. Use - for stdout.'
+        ),
+    )
+    parser.add_argument(
+        '--exclude',
+        action='append',
+        default=[],
+        metavar='PATTERN',
+        help=(
+            'Skip source files matching this glob, against either the whole '
+            'path or the file name. Repeatable.'
+        ),
+    )
+    parser.add_argument(
+        '--require-docs',
+        action='store_true',
+        help=(
+            'Exit non-zero if a public function() or macro() carries no doc '
+            'comment. A name starting with _ is private and is not required '
+            'to have one.'
+        ),
     )
     parser.add_argument(
         '--strict',
@@ -115,7 +147,7 @@ def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
             f'got {len(args.template)} --template and {len(args.output)} '
             '--output arguments; each template needs exactly one output'
         )
-    if args.check and STDOUT in args.output:
+    if args.check and (STDOUT in args.output or args.json == STDOUT):
         raise UsageError(f'--output {STDOUT} writes nothing to check')
 
     # Two templates rendering into one file: one of the two results would be
@@ -136,7 +168,34 @@ def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
     return list(zip(args.template, args.output, strict=True))
 
 
-def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
+def read_ignore_file(directory: pathlib.Path) -> list[str]:
+    """The patterns in `directory`/.cmake2mdignore, if there is one."""
+    path = directory / IGNORE_FILE
+    if not path.is_file():
+        return []
+    return [
+        line.strip()
+        for line in path.read_text(encoding='utf-8').splitlines()
+        if line.strip() and not line.lstrip().startswith('#')
+    ]
+
+
+def is_excluded(path: pathlib.Path, patterns: Sequence[str]) -> bool:
+    """Whether `path` matches a pattern, as a whole path or as a name.
+
+    Both are tried because '*/tests/*' and 'test_*.cmake' are both natural
+    ways to say what to leave out.
+    """
+    text = path.as_posix()
+    return any(
+        fnmatch.fnmatch(text, pattern) or fnmatch.fnmatch(path.name, pattern)
+        for pattern in patterns
+    )
+
+
+def collect_sources(
+    paths: Sequence[str], exclude: Sequence[str] = ()
+) -> list[pathlib.Path]:
     """Expand `paths` into the CMake files to read.
 
     A directory is searched, and a pattern expanded, because the shells that
@@ -159,7 +218,7 @@ def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
             matches = sorted(pathlib.Path(m) for m in glob.glob(path, recursive=True))
         if not matches:
             raise UsageError(f'no CMake sources found at {path}')
-        found += matches
+        found += [m for m in matches if not is_excluded(m, exclude)]
     return found
 
 
@@ -205,6 +264,23 @@ def enrich(
         # nothing for the function template to do with it.
         res['pretty'] = doc.description
     return res
+
+
+def report_undocumented(symbols: Sequence[dict[str, Any]]) -> bool:
+    """Report every public symbol that carries no doc comment.
+
+    A leading underscore is CMake's way of saying a function is private, and
+    @internal says it outright; neither is required to be documented.
+    """
+    ok = True
+    for symbol in symbols:
+        if symbol['name'].startswith('_') or symbol['doc'].internal:
+            continue
+        if any(line.strip() for line in symbol['comments']):
+            continue
+        print(f'{symbol["location"]}: error: undocumented', file=sys.stderr)
+        ok = False
+    return ok
 
 
 def collect_groups(blocks: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -254,9 +330,20 @@ def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
         if not path.exists():
             print(f'{path}: would be created', file=sys.stderr)
             return False
-        if path.read_text(encoding='utf-8') == content:
+        current = path.read_text(encoding='utf-8')
+        if current == content:
             return True
         print(f'{path}: out of date', file=sys.stderr)
+        # The diff is what makes the failure actionable in CI, where nobody
+        # can re-run the generator to see what changed.
+        sys.stderr.writelines(
+            difflib.unified_diff(
+                current.splitlines(keepends=True),
+                content.splitlines(keepends=True),
+                fromfile=f'{path} (on disk)',
+                tofile=f'{path} (generated)',
+            )
+        )
         return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -295,7 +382,9 @@ def run(args: argparse.Namespace) -> int:
     commands: list[parse.Command] = []
     variables: list[parse.Variable] = []
     blocks: list[parse.Block] = []
-    for path in collect_sources(args.path):
+    for path in collect_sources(
+        args.path, args.exclude + read_ignore_file(pathlib.Path.cwd())
+    ):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
@@ -318,6 +407,15 @@ def run(args: argparse.Namespace) -> int:
     }
 
     ok = True
+    if args.require_docs:
+        ok &= report_undocumented(context['symbols'])
+    if args.json:
+        content = serialize.dump(context)
+        if args.json == STDOUT:
+            sys.stdout.write(content)
+        else:
+            ok &= write_output(pathlib.Path(args.json), content, args.check)
+
     for (_, output), (_, name) in zip(pairs, specs, strict=True):
         template = rendering.load_template(env, name, search_dirs)
         content = rendering.render_document(template, context)

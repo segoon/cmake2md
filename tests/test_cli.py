@@ -509,3 +509,153 @@ def test_parameter_type_and_default_are_rendered(tmp_path):
     out = tmp_path / 'out.md'
     assert run('-t', 'function.md.jinja', '-o', out, source) == 0
     assert '(seconds, default `30`)' in out.read_text(encoding='utf-8')
+
+
+def test_json_dump_carries_the_model_and_a_schema_version(cmake_file, tmp_path):
+    import json
+
+    out = tmp_path / 'model.json'
+    assert (
+        run(
+            '-t',
+            'function.md.jinja',
+            '-o',
+            tmp_path / 'o.md',
+            '--json',
+            out,
+            cmake_file,
+        )
+        == 0
+    )
+
+    data = json.loads(out.read_text(encoding='utf-8'))
+    assert data['schema_version'] >= 1
+    names = [s['name'] for s in data['symbols']]
+    assert 'example_add_library' in names
+
+    symbol = next(s for s in data['symbols'] if s['name'] == 'example_add_library')
+    # The parsed comment is plain data, not a repr of the dataclass.
+    assert symbol['doc']['args'][0]['name'] == 'NAME'
+    assert symbol['doc']['params'][0]['required'] is True
+    assert [v['name'] for v in data['variables']] == [
+        'EXAMPLE_BUILD_TESTS',
+        'EXAMPLE_STATIC',
+        'EXAMPLE_DIR',
+    ]
+
+
+def test_json_to_stdout_is_rejected_with_check(cmake_file, template, tmp_path, capsys):
+    assert (
+        run(
+            '--check',
+            '-t',
+            template,
+            '-o',
+            tmp_path / 'o.md',
+            '--json',
+            '-',
+            cmake_file,
+        )
+        == 1
+    )
+    assert 'writes nothing to check' in capsys.readouterr().err
+
+
+UNDOCUMENTED_SOURCE = """\
+# Documented.
+function(documented)
+endfunction()
+
+function(bare)
+endfunction()
+
+function(_private)
+endfunction()
+
+# Documented but private.
+#
+# @internal
+function(helper)
+endfunction()
+"""
+
+
+def test_require_docs_reports_only_public_undocumented_symbols(
+    template, tmp_path, capsys
+):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(UNDOCUMENTED_SOURCE, encoding='utf-8')
+    assert run('--require-docs', '-t', template, '-o', tmp_path / 'o.md', source) == 1
+
+    err = capsys.readouterr().err
+    assert 'function bare: error: undocumented' in err
+    # A leading underscore and an explicit @internal both mean private.
+    assert '_private' not in err
+    assert 'helper' not in err
+
+
+def test_without_require_docs_an_undocumented_symbol_is_fine(
+    template, tmp_path, capsys
+):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(UNDOCUMENTED_SOURCE, encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'o.md', source) == 0
+    assert 'undocumented' not in capsys.readouterr().err
+
+
+def test_check_shows_what_differs(cmake_file, template, tmp_path, capsys):
+    out = tmp_path / 'out.md'
+    out.write_text('stale\n', encoding='utf-8')
+    assert run('--check', '-t', template, '-o', out, cmake_file) == 1
+
+    err = capsys.readouterr().err
+    assert 'out of date' in err
+    assert '-stale' in err
+    assert '(generated)' in err
+
+
+def test_exclude_skips_matching_sources(template, tmp_path):
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'tests' / 'b.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('--exclude', '*/tests/*', '-t', template, '-o', out, tmp_path) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## kept' in text
+    assert 'skipped' not in text
+
+
+def test_exclude_matches_a_bare_file_name_too(template, tmp_path):
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'test_helpers.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('--exclude', 'test_*.cmake', '-t', template, '-o', out, tmp_path) == 0
+    assert 'skipped' not in out.read_text(encoding='utf-8')
+
+
+def test_ignore_file_adds_exclusions(template, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '.cmake2mdignore').write_text(
+        '# what CI does not document\ntest_*.cmake\n', encoding='utf-8'
+    )
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'test_helpers.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, tmp_path) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## kept' in text
+    assert 'skipped' not in text

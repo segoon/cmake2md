@@ -287,7 +287,9 @@ cmake2md --template function.md.jinja --output docs/functions.md CMakeLists.txt
 ## Command line
 
 ```
-cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--strict] [--check] CMAKE_FILE...
+cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--json OUTPUT]
+         [--exclude PATTERN]... [--require-docs] [--strict] [--check]
+         CMAKE_FILE...
 ```
 
 | Flag | Effect |
@@ -295,6 +297,9 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--strict] [--check] CMAKE_FILE.
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
+| `--json` | Also write the parsed model as JSON, for tools that are not templates. |
+| `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
+| `--require-docs` | Exit non-zero if a public `function()` or `macro()` has no doc comment. |
 | `--strict` | Treat documentation warnings as errors: a doubtful `@tag`, or a comment that disagrees with the code. |
 | `--check` | Write nothing; exit non-zero if any output is missing or stale. |
 | `--list-templates` | List the built-in template names and exit. |
@@ -306,7 +311,31 @@ directories and patterns itself, so it behaves the same in shells that do not,
 such as those on Windows.
 
 `--check` is meant for CI, to verify that generated documentation was
-regenerated after a change to the CMake sources.
+regenerated after a change to the CMake sources; it prints a diff of what
+differs, since nobody in CI can re-run the generator to find out.
+
+`--require-docs` is the other CI gate, the equivalent of rustdoc's
+`missing_docs`: a public symbol with no doc comment fails the run. A name
+starting with `_` is private by CMake convention, and `@internal` says so
+outright; neither is required to be documented.
+
+A `.cmake2mdignore` file in the working directory lists further `--exclude`
+patterns, one per line, `#` starting a comment.
+
+### JSON
+
+`--json` writes the same model a template is given:
+
+```json
+{
+  "schema_version": 1,
+  "symbols": [{"name": "example_add_library", "doc": {"brief": "…"}}],
+  "variables": [], "commands": [], "groups": [], "files": []
+}
+```
+
+`schema_version` is bumped when a field disappears or changes meaning, never
+when one is added, so a consumer must ignore the fields it does not know.
 
 ## Development
 

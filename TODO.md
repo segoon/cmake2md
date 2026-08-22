@@ -53,18 +53,18 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## P4 — Output and CI integration
 
-- JSON dump of the model, as a stable versioned schema
-- inject into an existing README between markers, as terraform-docs does
+- [x] JSON dump of the model, as a stable versioned schema
+- [ ] inject into an existing README between markers, as terraform-docs does
 - config file: `[tool.cmake2md]` in `pyproject.toml`, instead of N paired
   `--template`/`--output` arguments in CI (`tomllib` is stdlib on 3.11+, so
   only 3.10 needs a fallback — ask before adding the dependency)
-- `--require-docs`: fail on an undocumented public symbol, like rustdoc's
-  `missing_docs`
-- show a diff in `--check` instead of only "out of date"
-- `--exclude` and an ignore file
-- a `reference.md.jinja` built-in with a table of contents, so a project needs
-  no template of its own
-- a pre-commit hook and a GitHub Action
+- [x] `--require-docs`: fail on an undocumented public symbol, like
+      rustdoc's `missing_docs`
+- [x] show a diff in `--check` instead of only "out of date"
+- [x] `--exclude` and an ignore file
+- [ ] a `reference.md.jinja` built-in with a table of contents, so a project
+      needs no template of its own
+- [ ] a pre-commit hook and a GitHub Action
 
 ## P5 — Parsing
 
