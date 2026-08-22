@@ -4,6 +4,12 @@
 
 ### Added
 
+- `variables`, a third list templates are rendered with: every cache entry a
+  user can set, from `option()` and from `set(... CACHE ...)`, parsed into
+  `name`, `type_`, `default`, `docstring` and `choices`. A template no longer
+  has to know the argument order of either command, nor that the help string
+  is the second argument of one and the fifth of the other. `choices` comes
+  from `set_property(CACHE ... PROPERTY STRINGS ...)`.
 - The parameters a `function()` or `macro()` accepts are read from its own
   code: the named parameters of `function(f NAME TYPE)` and the keyword lists
   of `cmake_parse_arguments()`, in both of its call forms. Templates see them

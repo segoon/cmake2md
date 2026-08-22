@@ -19,14 +19,16 @@ hands templates raw argument lists, which is where every comparable tool
 - [x] output variables: `set(X ... PARENT_SCOPE)` and `return(PROPAGATE X)`,
       documented with `@return`
 
-## P2 — Typed model for commands
+## P2 — Typed model for commands (done)
 
-- `option()` and `set(... CACHE ...)` parsed into records (name, type,
-  default, docstring, `STRINGS` choices) exposed as a `variables` context list
-- retire the positional `cmd.args[0]` / `cmd.args[4]` indexing in
-  `examples/reference.md.jinja`, which depends on the argument order of the
-  commands it reads
-- keep `commands` as it is, for templates that already use it
+- [x] `option()` and `set(... CACHE ...)` parsed into records (name, type,
+      default, docstring, `STRINGS` choices) exposed as a `variables` context
+      list
+- [x] retire the positional `cmd.args[0]` / `cmd.args[4]` indexing in
+      `examples/reference.md.jinja`
+- [x] keep `commands` as it is, for templates that already use it
+- [ ] `mark_as_advanced()`, the CMake way of saying a variable is not for
+      ordinary users — the same shape of work as `choices`
 
 ## P3 — Tag vocabulary
 

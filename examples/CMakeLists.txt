@@ -18,6 +18,10 @@ option(EXAMPLE_BUILD_DOCS "Build the HTML documentation" OFF)
 # @ingroup compilation
 option(EXAMPLE_USE_SANITIZERS "Build with sanitizers enabled" OFF)
 
+# @ingroup compilation
+set(EXAMPLE_SANITIZERS "address" CACHE STRING "Sanitizers to enable")
+set_property(CACHE EXAMPLE_SANITIZERS PROPERTY STRINGS address thread undefined)
+
 # Not tagged with @@ingroup, so it lands in the ungrouped table.
 option(EXAMPLE_STATIC "Link everything statically" OFF)
 

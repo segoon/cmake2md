@@ -116,6 +116,32 @@ class Command(Documented):
 
 
 @dataclasses.dataclass
+class Variable(Documented):
+    """A cache entry a user can set: option() or set(... CACHE ...).
+
+    The two commands spell the same thing differently, and a template that
+    reads their raw arguments has to know the argument order of each.  This is
+    that knowledge, applied once.
+    """
+
+    #: The command that created the entry, 'option' or 'set'.
+    command: str
+    #: The CMake cache type: BOOL, PATH, FILEPATH, STRING or INTERNAL.
+    type_: str
+    #: The value the entry holds unless the user overrides it.
+    default: str
+    #: The help string CMake itself shows for the entry, from the command.
+    #: The doc comment above it, if any, is in `comments` as for anything else.
+    docstring: str
+    #: The values set_property(CACHE ... PROPERTY STRINGS) restricts it to.
+    choices: list[str] | None = None
+
+    @property
+    def kind(self) -> str:
+        return 'option' if self.command == 'option' else 'cache variable'
+
+
+@dataclasses.dataclass
 class CommentBlock:
     lines: list[str]
     #: File line the block starts on; 0 when there is no comment.
@@ -367,20 +393,26 @@ def extract_symbols(file: File) -> list[Symbol]:
     return symbols
 
 
+def command_calls(file: File) -> Iterator[tuple[Node, str, list[Node]]]:
+    """Every command call in the file, as (node, name, argument nodes)."""
+    query_cursor = QueryCursor(COMMAND_QUERY)
+    for _, captures in query_cursor.matches(file.tree.root_node):
+        captured = captures.get('arguments')
+        yield (
+            captures['command'][0],
+            file.get_text(captures['name'][0]),
+            arguments_of(file, captured[0] if captured else None),
+        )
+
+
 def extract_commands(file: File) -> list[Command]:
     commands = []
 
-    query_cursor = QueryCursor(COMMAND_QUERY)
-    matches = query_cursor.matches(file.tree.root_node)
-    for _, captures in matches:
-        command = captures['command'][0]
-        captured = captures.get('arguments')
-        arguments = arguments_of(file, captured[0] if captured else None)
+    for command, name, arguments in command_calls(file):
         block = get_comments(file, command)
-
         commands.append(
             Command(
-                name=file.get_text(captures['name'][0]),
+                name=name,
                 args=[file.get_text(argument) for argument in arguments],
                 comments=block.lines,
                 comments_line=block.line,
@@ -389,6 +421,111 @@ def extract_commands(file: File) -> list[Command]:
             )
         )
     return commands
+
+
+#: The keyword that turns a set() into a cache entry.
+CACHE = 'CACHE'
+#: Cache type of an option(), which the command does not spell out.
+OPTION_TYPE = 'BOOL'
+#: Default of an option() that was given none.
+OPTION_DEFAULT = 'OFF'
+
+
+def option_fields(file: File, arguments: Sequence[Node]) -> tuple[str, str, str]:
+    """The type, default and help string of option(NAME "doc" [DEFAULT])."""
+    default = (
+        argument_name(file, arguments[2]) if len(arguments) > 2 else OPTION_DEFAULT
+    )
+    docstring = argument_name(file, arguments[1]) if len(arguments) > 1 else ''
+    return OPTION_TYPE, default, docstring
+
+
+def cache_set_fields(
+    file: File, arguments: Sequence[Node]
+) -> tuple[str, str, str] | None:
+    """The type, default and help string of set(NAME ... CACHE TYPE "doc").
+
+    None when the call writes no cache entry, which is the ordinary set() and
+    not something a user can configure.
+    """
+    names = [argument_name(file, argument) for argument in arguments]
+    if CACHE not in names:
+        return None
+
+    cache = names.index(CACHE)
+    # Everything between the name and CACHE is the value; CMake joins several
+    # of them with ';' into a list, so the default reads the same way.
+    default = ';'.join(names[1:cache])
+    type_ = names[cache + 1] if len(names) > cache + 1 else ''
+    docstring = names[cache + 2] if len(names) > cache + 2 else ''
+    return type_, default, docstring
+
+
+def cache_choices(file: File) -> dict[str, list[str]]:
+    """The value lists set with set_property(CACHE ... PROPERTY STRINGS ...).
+
+    Only calls in the same file are seen, which is where a cache entry and the
+    values it is restricted to are conventionally written together.
+    """
+    choices: dict[str, list[str]] = {}
+    for _, name, arguments in command_calls(file):
+        # set_property(CACHE <entry>... PROPERTY STRINGS <value>...)
+        words = [argument_name(file, argument) for argument in arguments]
+        if name != 'set_property' or words[:1] != [CACHE]:
+            continue
+        if 'PROPERTY' not in words or words[words.index('PROPERTY') + 1 :][:1] != [
+            'STRINGS'
+        ]:
+            continue
+
+        property_at = words.index('PROPERTY')
+        # A value may itself be one ';'-separated list.
+        values = [
+            word for value in words[property_at + 2 :] for word in value.split(';')
+        ]
+        for entry in words[1:property_at]:
+            choices[entry] = values
+    return choices
+
+
+def extract_variables(file: File) -> list[Variable]:
+    """Extract the cache entries a user can set, documented or not."""
+    variables = []
+    choices = cache_choices(file)
+
+    for command, name, arguments in command_calls(file):
+        if name not in ('option', 'set') or not arguments:
+            continue
+        # A computed name is nothing a reader could look up or set.
+        if contains_variable_ref(arguments[0]):
+            continue
+
+        fields = (
+            option_fields(file, arguments)
+            if name == 'option'
+            else cache_set_fields(file, arguments)
+        )
+        if fields is None:
+            continue
+
+        type_, default, docstring = fields
+        block = get_comments(file, command)
+        entry = argument_name(file, arguments[0])
+        variables.append(
+            Variable(
+                name=entry,
+                command=name,
+                type_=type_,
+                default=default,
+                docstring=docstring,
+                choices=choices.get(entry),
+                comments=block.lines,
+                comments_line=block.line,
+                filepath=file.filepath,
+                line=command.start_point.row + 1,
+            )
+        )
+    return variables
 
 
 def parse_file(path: str | pathlib.Path) -> File:

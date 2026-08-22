@@ -41,12 +41,22 @@ def cmake_file(tmp_path):
 
 
 @pytest.fixture
-def symbols_of(tmp_path):
-    """Parse a CMake snippet given as a string and return its symbols."""
+def parsed(tmp_path):
+    """Parse a CMake snippet given as a string."""
 
     def parse_source(source):
         path = tmp_path / 'CMakeLists.txt'
         path.write_text(source, encoding='utf-8')
-        return parse.extract_symbols(parse.parse_file(path))
+        return parse.parse_file(path)
 
     return parse_source
+
+
+@pytest.fixture
+def symbols_of(parsed):
+    return lambda source: parse.extract_symbols(parsed(source))
+
+
+@pytest.fixture
+def variables_of(parsed):
+    return lambda source: parse.extract_variables(parsed(source))

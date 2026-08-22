@@ -177,7 +177,7 @@ def report(
 
 
 def enrich(
-    item: parse.Symbol | parse.Command,
+    item: parse.Documented,
     function_template: jinja2.Template | None,
     strict: bool,
 ) -> dict[str, Any]:
@@ -269,15 +269,18 @@ def run(args: argparse.Namespace) -> int:
 
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
+    variables: list[parse.Variable] = []
     for path in collect_sources(args.path):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
+        variables += parse.extract_variables(file)
     warn_duplicate_symbols(symbols)
 
     context = {
         'symbols': [enrich(s, function_template, args.strict) for s in symbols],
         'commands': [enrich(c, None, args.strict) for c in commands],
+        'variables': [enrich(v, None, args.strict) for v in variables],
     }
 
     ok = True

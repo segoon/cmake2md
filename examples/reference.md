@@ -90,14 +90,12 @@ example_fail(
 
 ## General
 
-
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_STATIC` | Link everything statically | `OFF` |
 
 
 ## Build targets
-
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -107,14 +105,14 @@ example_fail(
 
 ## Compilation modes
 
-
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_USE_SANITIZERS` | Build with sanitizers enabled | `OFF` |
+| `EXAMPLE_SANITIZERS` | Sanitizers to enable (one of: address, thread, undefined) | `address` |
 
 
 ## Paths
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+|--------|-------------|---------|
 | `EXAMPLE_TOOLCHAIN_DIR` | Toolchain location | `/usr/local/toolchain` |

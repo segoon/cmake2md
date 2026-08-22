@@ -148,13 +148,15 @@ Register the tag there and handle it in `Parser._handle_tag`.
 
 ## Writing templates
 
-Templates receive two lists:
+Templates receive three lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
+- `variables` — every cache entry a user can set: `option()` and
+  `set(... CACHE ...)`, parsed
 - `commands` — every command call (`option()`, `set()`, …), including calls
   nested in a `function()` body or an `if()` block
 
-Both lists are unfiltered on purpose: the `documented` filter drops the
+All three are unfiltered on purpose: the `documented` filter drops the
 entries that carry no comment, and `only_command` selects the commands you
 actually document.
 
@@ -168,14 +170,36 @@ Each entry is a dict with:
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
-| `type_` | Symbols only: `'function'` or `'macro'`. |
+| `type_` | Symbols: `'function'` or `'macro'`. |
 | `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
+| `command` | Variables only: `'option'` or `'set'`. |
+| `type_` | Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
+| `default` | Variables only: the value the entry holds unless the user overrides it. |
+| `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
+| `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
 
 Each parameter in `doc.args` / `doc.options` / `doc.params` /
 `doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
 `.kind` and `.line`.
+
+### Build options
+
+`option(NAME "help" ON)` and `set(NAME value CACHE TYPE "help")` declare the
+same thing in a different order, so `variables` gives both of them one shape:
+
+```jinja
+| Option | Description | Default |
+|--------|-------------|---------|
+{%- for v in variables | only_group('build') %}
+| `{{ v.name }}` | {{ v.docstring | md_escape }} | `{{ v.default }}` |
+{%- endfor %}
+```
+
+A `set()` that writes no cache entry is a local variable rather than something
+to configure, so it is not in the list; it is still in `commands`. A
+`set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
 
 ### Filters
 

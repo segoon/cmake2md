@@ -208,6 +208,22 @@ def test_strict_rejects_documentation_disagreeing_with_the_code(
     assert 'SRCS is documented as @multiparam' in capsys.readouterr().err
 
 
+def test_variables_reach_templates_already_parsed(cmake_file, tmp_path):
+    var_template = tmp_path / 'vars.md.jinja'
+    var_template.write_text(
+        '{% for v in variables %}{{ v.name }}={{ v.default }}'
+        ' ({{ v.type_ }}, {{ v.docstring }}, {{ v.group }})\n{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', var_template, '-o', out, cmake_file) == 0
+    assert out.read_text(encoding='utf-8').splitlines() == [
+        'EXAMPLE_BUILD_TESTS=ON (BOOL, Build tests, build)',
+        'EXAMPLE_STATIC=OFF (BOOL, Link statically, None)',
+        'EXAMPLE_DIR=/opt/example (PATH, Where example lives, paths)',
+    ]
+
+
 def test_the_signature_is_available_to_templates(tmp_path):
     source = tmp_path / 'sig.cmake'
     source.write_text(
