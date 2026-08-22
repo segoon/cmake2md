@@ -76,8 +76,17 @@ a `macro()` or a command call. A blank line ends the run. The block is dedented
 as a whole, so the space in the conventional `# ` disappears while indentation
 *inside* the comment — nested lists, code blocks — is preserved.
 
-Only `#` line comments are doc comments. A bracket comment (`#[[ ... ]]`) is
-ignored, and a symbol documented that way reads as undocumented.
+Both comment forms carry documentation. A bracket comment works the same way,
+including the `#[==[.rst:` style CMake's own modules use, where the `.rst:`
+marker and the `#` of the closing `#]==]` are punctuation rather than text:
+
+```cmake
+#[==[.rst:
+@brief Adds a library target.
+#]==]
+function(example_add_library)
+endfunction()
+```
 
 | Tag | Applies to | Meaning |
 |-----|------------|---------|
@@ -203,6 +212,7 @@ Each entry is a dict with:
 | `default` | Variables only: the value the entry holds unless the user overrides it. |
 | `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
 | `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
+| `advanced` | Variables only: whether `mark_as_advanced()` hides it from the ordinary user. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
 
 Each parameter in `doc.args` / `doc.options` / `doc.params` /

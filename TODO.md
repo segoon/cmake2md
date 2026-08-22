@@ -30,8 +30,8 @@ hands templates raw argument lists, which is where every comparable tool
 - [x] retire the positional `cmd.args[0]` / `cmd.args[4]` indexing in
       `examples/reference.md.jinja`
 - [x] keep `commands` as it is, for templates that already use it
-- [ ] `mark_as_advanced()`, the CMake way of saying a variable is not for
-      ordinary users — the same shape of work as `choices`
+- [x] `mark_as_advanced()`, the CMake way of saying a variable is not for
+      ordinary users
 
 ## P3 — Tag vocabulary (done)
 
@@ -66,10 +66,10 @@ hands templates raw argument lists, which is where every comparable tool
       needs no template of its own
 - [x] a pre-commit hook and a GitHub Action
 
-## P5 — Parsing
+## P5 — Parsing (done)
 
-- bracket comments (`#[[ ... ]]`), including CMake's own `#[[.rst:` style:
-  today a symbol documented that way silently reads as undocumented
+- [x] bracket comments (`#[[ ... ]]`), including CMake's own `#[==[.rst:`
+      style
 
 ## Decided against
 

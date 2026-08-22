@@ -4,6 +4,11 @@
 
 ### Added
 
+- Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
+  including CMake's own `#[==[.rst:` house style. A symbol documented that way
+  used to read as undocumented, silently.
+- `mark_as_advanced()` sets `advanced` on a variable, which is CMake's own way
+  of saying an entry is not one an ordinary user reaches for.
 - `--inject` writes between the `<!-- BEGIN_CMAKE2MD -->` and
   `<!-- END_CMAKE2MD -->` markers of an existing file, so generated
   documentation can live inside a hand-written README. It composes with
