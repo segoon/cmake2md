@@ -1,0 +1,295 @@
+"""Command line entry point."""
+
+import argparse
+import dataclasses
+import glob
+import pathlib
+import sys
+from collections.abc import Sequence
+from typing import Any
+
+import jinja2
+
+from . import __version__
+from . import doc_parser
+from . import parse
+from . import rendering
+from . import tag_lexer
+from .errors import Cmake2mdError
+from .errors import ParseError
+from .errors import UsageError
+
+#: The --output value that means "write to stdout" instead of to a file.
+STDOUT = '-'
+#: What a directory given as CMAKE_FILE is searched for.
+SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog='cmake2md',
+        description=(
+            'Generate documentation from CMake sources by extracting '
+            'doxygen-like comments and rendering them with Jinja templates.'
+        ),
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'cmake2md {__version__}',
+        help='Show the version and exit.',
+    )
+    parser.add_argument(
+        '-t',
+        '--template',
+        action='append',
+        default=[],
+        metavar='TEMPLATE',
+        help=(
+            'Jinja template to render; either a path or the name of a '
+            'built-in template. Repeatable, paired with --output in order.'
+        ),
+    )
+    parser.add_argument(
+        '-o',
+        '--output',
+        action='append',
+        default=[],
+        metavar='OUTPUT',
+        help='Where to write the corresponding --template. Repeatable.',
+    )
+    parser.add_argument(
+        '-I',
+        '--template-dir',
+        action='append',
+        default=[],
+        metavar='DIR',
+        help='Additional directory to search for templates. Repeatable.',
+    )
+    parser.add_argument(
+        '--strict',
+        action='store_true',
+        help=(
+            'Treat doubtful @tags as errors instead of literal text: an '
+            'unknown tag, or a known tag not followed by a name.'
+        ),
+    )
+    parser.add_argument(
+        '--check',
+        action='store_true',
+        help=(
+            'Do not write anything; exit non-zero if any output is missing '
+            'or differs from what is already on disk.'
+        ),
+    )
+    parser.add_argument(
+        '--list-templates',
+        action='store_true',
+        help='List the built-in template names and exit.',
+    )
+    parser.add_argument(
+        'path',
+        nargs='*',
+        metavar='CMAKE_FILE',
+        help=(
+            'CMake sources to read: files, directories to search for '
+            'CMakeLists.txt and *.cmake, or glob patterns.'
+        ),
+    )
+    return parser
+
+
+def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
+    if not args.template:
+        raise UsageError('no --template given, nothing to render')
+    if not args.path:
+        raise UsageError('no CMAKE_FILE given, nothing to read')
+    if len(args.template) != len(args.output):
+        if not args.output and any(':' in t for t in args.template):
+            raise UsageError(
+                'the TEMPLATE:OUTPUT form is no longer supported; '
+                'use --template TEMPLATE --output OUTPUT instead'
+            )
+        raise UsageError(
+            f'got {len(args.template)} --template and {len(args.output)} '
+            '--output arguments; each template needs exactly one output'
+        )
+    if args.check and STDOUT in args.output:
+        raise UsageError(f'--output {STDOUT} writes nothing to check')
+
+    # Two templates rendering into one file: one of the two results would be
+    # silently thrown away, which can only be a mistake.
+    seen: dict[str, str] = {}
+    for template, output in zip(args.template, args.output, strict=True):
+        if output == STDOUT:
+            continue
+        key = str(pathlib.Path(output).resolve())
+        if key in seen:
+            raise UsageError(
+                f'--output {output} is given twice, for {seen[key]} and '
+                f'{template}; each template needs its own output'
+            )
+        seen[key] = template
+
+    # The lengths are equal by the check above.
+    return list(zip(args.template, args.output, strict=True))
+
+
+def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
+    """Expand `paths` into the CMake files to read.
+
+    A directory is searched, and a pattern expanded, because the shells that
+    would otherwise do it (and Windows' do not) are not always in the picture:
+    cmake2md is typically run from a build system or a CI step.
+    """
+    found: list[pathlib.Path] = []
+    for path in paths:
+        candidate = pathlib.Path(path)
+        if candidate.is_dir():
+            matches = sorted(
+                match
+                for pattern in SOURCE_GLOBS
+                for match in candidate.rglob(pattern)
+                if not any(part.startswith('.') for part in match.parts)
+            )
+        elif candidate.exists():
+            matches = [candidate]
+        else:
+            matches = sorted(pathlib.Path(m) for m in glob.glob(path, recursive=True))
+        if not matches:
+            raise UsageError(f'no CMake sources found at {path}')
+        found += matches
+    return found
+
+
+def enrich(
+    item: parse.Symbol | parse.Command,
+    function_template: jinja2.Template | None,
+    strict: bool,
+) -> dict[str, Any]:
+    """Attach the parsed doc comment and a rendered form to `item`."""
+    try:
+        doc = doc_parser.parse(
+            tag_lexer.tokenize(item.comments),
+            strict=strict,
+            first_line=item.comments_line or item.line,
+        )
+    except ParseError as exc:
+        raise exc.at(item.location_at(exc.line)) from None
+
+    for warning in doc.warnings:
+        location = item.location_at(warning.line)
+        print(f'{location}: warning: {warning.message}', file=sys.stderr)
+
+    res = dataclasses.asdict(item)
+    res['doc'] = doc
+    res['group'] = doc.group
+    res['location'] = item.location
+    if function_template is not None:
+        res['pretty'] = function_template.render({'symbol': res}).strip()
+    else:
+        # A command call has no signature of its own to render, so there is
+        # nothing for the function template to do with it.
+        res['pretty'] = doc.description
+    return res
+
+
+def warn_duplicate_symbols(symbols: Sequence[parse.Symbol]) -> None:
+    """Report a name defined more than once across the sources read.
+
+    CMake allows the redefinition, so this is a warning: the documentation
+    would otherwise describe the same name twice with no hint of which
+    definition wins.
+    """
+    first_seen: dict[str, parse.Symbol] = {}
+    for symbol in symbols:
+        earlier = first_seen.setdefault(symbol.name, symbol)
+        if earlier is not symbol:
+            print(
+                f'{symbol.location}: warning: {symbol.name} is already '
+                f'defined at {earlier.location}',
+                file=sys.stderr,
+            )
+
+
+def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
+    """Write `content`, or in check mode report whether it is up to date."""
+    if check:
+        if not path.exists():
+            print(f'{path}: would be created', file=sys.stderr)
+            return False
+        if path.read_text(encoding='utf-8') == content:
+            return True
+        print(f'{path}: out of date', file=sys.stderr)
+        return False
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Explicit newline: on Windows the default would write CRLF, so generated
+    # documentation would differ per platform and --check would never settle.
+    path.write_text(content, encoding='utf-8', newline='\n')
+    return True
+
+
+def list_templates() -> int:
+    for name in sorted(rendering.builtin_loader().list_templates()):
+        print(name)
+    return 0
+
+
+def run(args: argparse.Namespace) -> int:
+    if args.list_templates:
+        return list_templates()
+
+    pairs = validate_args(args)
+
+    specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]
+    # Most specific first: what the user asked for by -I, then the directory a
+    # template was named by path from, and the working directory only as a
+    # last resort before the built-ins.
+    search_dirs = [pathlib.Path(d) for d in args.template_dir]
+    search_dirs += [d for d, _ in specs if d is not None]
+    search_dirs.append(pathlib.Path.cwd())
+
+    env = rendering.build_environment(search_dirs)
+    function_template = rendering.load_template(
+        env, rendering.FUNCTION_TEMPLATE_NAME, search_dirs
+    )
+
+    symbols: list[parse.Symbol] = []
+    commands: list[parse.Command] = []
+    for path in collect_sources(args.path):
+        file = parse.parse_file(path)
+        symbols += parse.extract_symbols(file)
+        commands += parse.extract_commands(file)
+    warn_duplicate_symbols(symbols)
+
+    context = {
+        'symbols': [enrich(s, function_template, args.strict) for s in symbols],
+        'commands': [enrich(c, None, args.strict) for c in commands],
+    }
+
+    ok = True
+    for (_, output), (_, name) in zip(pairs, specs, strict=True):
+        template = rendering.load_template(env, name, search_dirs)
+        content = rendering.render_document(template, context)
+        if output == STDOUT:
+            sys.stdout.write(content)
+        else:
+            ok &= write_output(pathlib.Path(output), content, args.check)
+    return 0 if ok else 1
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    try:
+        return run(args)
+    except Cmake2mdError as exc:
+        print(f'cmake2md: error: {exc}', file=sys.stderr)
+        return 1
+    except jinja2.TemplateError as exc:
+        print(f'cmake2md: template error: {exc}', file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

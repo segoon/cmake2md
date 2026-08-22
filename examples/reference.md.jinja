@@ -1,0 +1,59 @@
+{#
+  A generic cmake2md template. See "Writing templates" in the README for the
+  context it is given and the filters it may use.
+
+  The option() and set() rows index into cmd.args positionally, so they depend
+  on the argument order of those two commands: option(NAME "doc" DEFAULT) and
+  set(NAME VALUE CACHE TYPE "doc").
+#}
+{% macro option_row(cmd) -%}
+| `{{ cmd.args[0] }}` | {{ cmd.args[1] | unquote | oneline | md_escape }} | `{{ cmd.args[2] | unquote | escape }}` |
+{%- endmacro %}
+
+{% macro variable_row(cmd) -%}
+| `{{ cmd.args[0] }}` | {{ cmd.args[4] | unquote | oneline | md_escape }} | `{{ cmd.args[1] | unquote | escape }}` |
+{%- endmacro %}
+
+{% macro option_table(cmds) %}
+| Option | Description | Default |
+|--------|-------------|---------|
+{%- for cmd in cmds %}
+{{ option_row(cmd) }}
+{%- endfor %}
+{% endmacro %}
+
+# API reference
+
+## Functions
+
+{% for symbol in symbols | documented if symbol.type_ == 'function' %}
+{{ symbol.pretty }}
+{% endfor %}
+
+## Macros
+
+{% for symbol in symbols | documented if symbol.type_ == 'macro' %}
+{{ symbol.pretty }}
+{% endfor %}
+
+# Build options
+
+## General
+
+{{ option_table(commands | only_command('option') | only_group(None)) }}
+
+## Build targets
+
+{{ option_table(commands | only_command('option') | only_group('build')) }}
+
+## Compilation modes
+
+{{ option_table(commands | only_command('option') | only_group('compilation')) }}
+
+## Paths
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+{%- for cmd in commands | only_command('set') | only_group('paths') %}
+{{ variable_row(cmd) }}
+{%- endfor %}
