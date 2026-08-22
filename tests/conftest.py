@@ -22,6 +22,12 @@ endfunction()
 
 function(undocumented_function)
 endfunction()
+
+# Warns about something.
+#
+# @arg TEXT the message to print
+macro(example_warn)
+endmacro()
 """
 
 

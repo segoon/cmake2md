@@ -9,6 +9,7 @@ from typing import Any
 
 import jinja2
 
+from . import __version__
 from . import doc_parser
 from . import parse
 from . import rendering
@@ -25,6 +26,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             'Generate documentation from CMake sources by extracting '
             'doxygen-like comments and rendering them with Jinja templates.'
         ),
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'cmake2md {__version__}',
+        help='Show the version and exit.',
     )
     parser.add_argument(
         '-t',
@@ -139,13 +146,15 @@ def run(args: argparse.Namespace) -> int:
     search_dirs.append(pathlib.Path.cwd())
 
     env = rendering.build_environment(search_dirs)
-    function_template = env.get_template(rendering.FUNCTION_TEMPLATE_NAME)
+    function_template = rendering.load_template(
+        env, rendering.FUNCTION_TEMPLATE_NAME, search_dirs
+    )
 
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
     for path in args.path:
         file = parse.parse_file(path)
-        symbols += parse.extract_functions(file)
+        symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
 
     context = {
@@ -155,7 +164,7 @@ def run(args: argparse.Namespace) -> int:
 
     ok = True
     for (_, output), (_, name) in zip(pairs, specs, strict=True):
-        template = env.get_template(name)
+        template = rendering.load_template(env, name, search_dirs)
         content = rendering.render_document(template, context)
         ok &= write_output(pathlib.Path(output), content, args.check)
     return 0 if ok else 1

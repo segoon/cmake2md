@@ -18,7 +18,7 @@ option(EXAMPLE_BUILD_DOCS "Build the HTML documentation" OFF)
 # @ingroup compilation
 option(EXAMPLE_USE_SANITIZERS "Build with sanitizers enabled" OFF)
 
-# Not tagged with @ingroup, so it lands in the ungrouped table.
+# Not tagged with @@ingroup, so it lands in the ungrouped table.
 option(EXAMPLE_STATIC "Link everything statically" OFF)
 
 # @ingroup paths
@@ -47,4 +47,19 @@ endfunction()
 # @param TIMEOUT seconds before the test is considered hung
 function(example_add_test)
     cmake_parse_arguments(ARG "" "TIMEOUT" "SOURCES" ${ARGN})
+endfunction()
+
+# Aborts the configuration with a message.
+#
+# A macro rather than a function, so that return() propagates to the caller.
+#
+# @arg REASON why the build cannot continue
+macro(example_fail)
+    message(FATAL_ERROR "${ARGV0}")
+endmacro()
+
+# A blank line ends a comment block, so the helper below counts as
+# undocumented and the `documented` filter leaves it out of the reference.
+
+function(_example_internal_helper)
 endfunction()

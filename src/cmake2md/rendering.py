@@ -8,6 +8,8 @@ from typing import Any
 
 import jinja2
 
+from .errors import UsageError
+
 #: Name of the template used to render each function into ``symbol.pretty``.
 #: Shadowing this file from a `--template-dir` overrides the built-in one.
 FUNCTION_TEMPLATE_NAME = 'function.md.jinja'
@@ -53,6 +55,11 @@ def only_group(collection: Iterable[Item], name: str | None) -> list[Item]:
     return [item for item in collection if item.get('group') == name]
 
 
+def documented(collection: Iterable[Item]) -> list[Item]:
+    """Keep only the entries that carry a doc comment."""
+    return [item for item in collection if any(c.strip() for c in item['comments'])]
+
+
 FILTERS = {
     'unquote': unquote,
     'escape': escape,
@@ -60,6 +67,7 @@ FILTERS = {
     'oneline': oneline,
     'only_group': only_group,
     'only_command': only_command,
+    'documented': documented,
     'render': render,
 }
 
@@ -93,11 +101,15 @@ def resolve_template_spec(spec: str) -> tuple[pathlib.Path | None, str]:
     return None, spec
 
 
+def builtin_loader() -> jinja2.PackageLoader:
+    return jinja2.PackageLoader('cmake2md', 'templates')
+
+
 def build_environment(search_dirs: Sequence[pathlib.Path]) -> jinja2.Environment:
     loader = jinja2.ChoiceLoader(
         [
             jinja2.FileSystemLoader([str(d) for d in search_dirs]),
-            jinja2.PackageLoader('cmake2md', 'templates'),
+            builtin_loader(),
         ]
     )
     env = jinja2.Environment(
@@ -107,6 +119,24 @@ def build_environment(search_dirs: Sequence[pathlib.Path]) -> jinja2.Environment
     )
     env.filters.update(FILTERS)
     return env
+
+
+def load_template(
+    env: jinja2.Environment, name: str, search_dirs: Sequence[pathlib.Path]
+) -> jinja2.Template:
+    """Load `name`, turning a miss into an error that says where we looked."""
+    try:
+        return env.get_template(name)
+    except jinja2.TemplateNotFound as exc:
+        # exc.name rather than `name`: the miss may come from an {% include %}.
+        missing = exc.name or name
+        searched = ', '.join(str(d) for d in search_dirs) or '(no directories)'
+        builtins = ', '.join(sorted(builtin_loader().list_templates()))
+        raise UsageError(
+            f'template not found: {missing}\n'
+            f'  searched: {searched}\n'
+            f'  built-in templates: {builtins}'
+        ) from None
 
 
 def render_document(template: jinja2.Template, context: dict[str, Any]) -> str:

@@ -1,4 +1,7 @@
+import pytest
+
 from cmake2md import rendering
+from cmake2md.errors import UsageError
 
 
 def test_unquote():
@@ -34,6 +37,15 @@ def test_only_command_and_only_group():
 
 def test_only_group_tolerates_items_without_a_group():
     assert rendering.only_group([{'name': 'x'}], None) == [{'name': 'x'}]
+
+
+def test_documented_keeps_only_commented_items():
+    items: list[rendering.Item] = [
+        {'name': 'a', 'comments': [' doc']},
+        {'name': 'b', 'comments': []},
+        {'name': 'c', 'comments': ['', '  ']},
+    ]
+    assert rendering.documented(items) == [items[0]]
 
 
 def test_collapse_blank_lines():
@@ -78,3 +90,13 @@ def test_search_dirs_shadow_the_builtin_template(tmp_path):
     env = rendering.build_environment([tmp_path])
     template = env.get_template(rendering.FUNCTION_TEMPLATE_NAME)
     assert template.render({}) == 'overridden'
+
+
+def test_load_template_reports_where_it_looked(tmp_path):
+    env = rendering.build_environment([tmp_path])
+    with pytest.raises(UsageError) as exc:
+        rendering.load_template(env, 'nosuch.md.jinja', [tmp_path])
+    message = str(exc.value)
+    assert 'template not found: nosuch.md.jinja' in message
+    assert str(tmp_path) in message
+    assert rendering.FUNCTION_TEMPLATE_NAME in message

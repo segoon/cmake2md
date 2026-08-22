@@ -63,6 +63,18 @@ example-check: ## Verify the example documentation is up to date
 .PHONY: dist
 dist: clean ## Build the sdist and the wheel
 	$(PYTHON) -m build
+	$(PYTHON) -m twine check --strict dist/*
+
+.PHONY: release-check
+release-check: check example-check dist ## Everything that must pass before a release
+
+.PHONY: publish-test
+publish-test: release-check ## Upload to TestPyPI
+	$(PYTHON) -m twine upload --repository testpypi dist/*
+
+.PHONY: publish
+publish: release-check ## Upload to PyPI
+	$(PYTHON) -m twine upload dist/*
 
 .PHONY: clean
 clean: ## Remove build artifacts and caches

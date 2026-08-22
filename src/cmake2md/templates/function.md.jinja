@@ -1,9 +1,10 @@
 {#
-  Renders a single function.
+  Renders a single function() or macro().
 
-  Used two ways: cmake2md renders it once per function to build
+  Used two ways: cmake2md renders it once per symbol to build
   `symbol.pretty`, and it also works as a whole-document template
-  (`--template function.md.jinja`), where it documents every function.
+  (`--template function.md.jinja`), where it documents every documented
+  function and macro.
 #}
 {% macro required(r) %}
 {%- if not r %}[{% endif %}
@@ -12,6 +13,8 @@
 {%- endmacro -%}
 
 {% macro function(symbol) %}
+{%- set has_params = symbol.doc.args or symbol.doc.options
+                     or symbol.doc.params or symbol.doc.multi_params %}
 ## {{ symbol.name }}
 
 {{ symbol.doc.description }}
@@ -30,7 +33,8 @@
 {%- for arg in symbol.doc.multi_params %}
     {% call required(arg.required) %}{{ arg.name }} <value>...{% endcall %}
 {%- endfor %}
-)
+{%- if has_params %}
+{% endif %})
 ```
 {% for arg in symbol.doc.args %}
 * <**{{ arg.name }}**> {{ arg.description }}
@@ -49,7 +53,7 @@
 {% if symbol is defined %}
 {{- function(symbol) }}
 {%- else %}
-{%- for symbol in symbols %}
+{%- for symbol in symbols | documented %}
 {{ function(symbol) }}
 {%- endfor %}
 {%- endif %}

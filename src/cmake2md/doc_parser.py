@@ -61,7 +61,12 @@ class DocComment:
 
 
 _NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
+# A name has to carry at least one identifier character; prose that merely
+# mentions a tag ('not tagged with @ingroup, so ...') would otherwise take the
+# punctuation that follows it as the name.
+_PLAUSIBLE_NAME_RE = re.compile(r'[A-Za-z0-9_]')
 _PARAM_TAGS = frozenset(kind.value for kind in ParamKind)
+_LITERAL_HINT = 'kept as literal text; use @@ to write a literal "@"'
 
 
 class Parser:
@@ -107,10 +112,22 @@ class Parser:
     def _handle_tag(self, tag: tag_lexer.Tag) -> None:
         spec = TAG_SPECS.get(tag.name)
         if spec is None:
-            self._unknown_tag(tag)
+            self._literal_tag(
+                tag, f'unknown tag @{tag.name} (line {tag.line}), {_LITERAL_HINT}'
+            )
             return
 
-        name = self._take_name(tag) if spec.takes_name else ''
+        name = ''
+        if spec.takes_name:
+            taken = self._take_name(tag)
+            if taken is None:
+                self._literal_tag(
+                    tag,
+                    f'@{tag.name} (line {tag.line}) is not followed by a name, '
+                    f'{_LITERAL_HINT}',
+                )
+                return
+            name = taken
 
         if tag.name in _PARAM_TAGS:
             self._finalize_param()
@@ -129,22 +146,28 @@ class Parser:
         elif tag.name == 'ingroup':
             self._group = name
 
-    def _unknown_tag(self, tag: tag_lexer.Tag) -> None:
+    def _literal_tag(self, tag: tag_lexer.Tag, message: str) -> None:
+        """Keep `tag` in the text as written, saying why (or fail if strict)."""
         if self._strict:
-            raise ParseError(f'unknown tag @{tag.name} (line {tag.line})')
-        self._warnings.append(
-            f'unknown tag @{tag.name} (line {tag.line}), '
-            'kept as literal text; use @@ to write a literal "@"'
-        )
+            raise ParseError(message)
+        self._warnings.append(message)
         self._description += '@' + tag.name
 
-    def _take_name(self, tag: tag_lexer.Tag) -> str:
+    def _take_name(self, tag: tag_lexer.Tag) -> str | None:
+        """Consume the word after `tag`, or return None if it is not a name.
+
+        Nothing is consumed in the None case, so the caller can fall back to
+        treating the tag as literal text.
+        """
         token = self._tokens[self._pos] if self._pos < len(self._tokens) else None
         m = _NAME_RE.match(token) if isinstance(token, str) else None
         if m is None:
             raise ParseError(f'@{tag.name} requires a name (line {tag.line})')
+        name = m.group(1)
+        if not _PLAUSIBLE_NAME_RE.search(name):
+            return None
         self._tokens[self._pos] = m.group(2)
-        return m.group(1)
+        return name
 
     def _finalize_param(self) -> None:
         if self._kind is not None:

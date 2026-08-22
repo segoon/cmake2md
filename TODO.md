@@ -1,3 +1,2 @@
 - split README.md -> DEVELOPMENT.md
 - integrate cmake2md into CMakeLists.txt
-- venv

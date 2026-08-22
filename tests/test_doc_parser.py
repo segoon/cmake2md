@@ -98,6 +98,25 @@ def test_tag_directly_followed_by_another_tag_is_an_error():
         parse(' @param @option QUIET q')
 
 
+def test_tag_mentioned_in_prose_is_kept_as_text_with_a_warning():
+    doc = parse(' Not tagged with @ingroup, so it is ungrouped.')
+    assert doc.group is None
+    assert doc.description == 'Not tagged with @ingroup, so it is ungrouped.'
+    assert '@ingroup' in doc.warnings[0]
+
+
+def test_tag_mentioned_in_prose_is_fatal_in_strict_mode():
+    with pytest.raises(ParseError, match='@ingroup'):
+        parse(' Not tagged with @ingroup, so it is ungrouped.', strict=True)
+
+
+def test_escaped_tag_in_prose_warns_about_nothing():
+    doc = parse(' Not tagged with @@ingroup, so it is ungrouped.')
+    assert doc.group is None
+    assert doc.description == 'Not tagged with @ingroup, so it is ungrouped.'
+    assert doc.warnings == []
+
+
 def test_email_in_description_survives():
     doc = parse(' Ask maintainer@example.com about it.')
     assert doc.description == 'Ask maintainer@example.com about it.'

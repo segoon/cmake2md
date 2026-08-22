@@ -4,17 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cmake2md"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Documentation generator for CMake: extracts doxygen-like comments and renders them with Jinja templates"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Vasiliy Kulikov", email = "segooon@gmail.com" }]
 keywords = ["cmake", "documentation", "doxygen", "jinja", "markdown"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -22,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Documentation",
     "Topic :: Software Development :: Build Tools",
+    "Typing :: Typed",
 ]
 dependencies = [
     "jinja2>=3.0,<4",
@@ -38,6 +41,7 @@ dev = [
     "mypy>=1.8",
     "ruff>=0.6",
     "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
@@ -47,6 +51,12 @@ cmake2md = "cmake2md.cli:main"
 Homepage = "https://github.com/segoon/cmake2md"
 Source = "https://github.com/segoon/cmake2md"
 Issues = "https://github.com/segoon/cmake2md/issues"
+Changelog = "https://github.com/segoon/cmake2md/blob/master/CHANGELOG.md"
+
+# Single source of truth for the version: cmake2md.__version__, which
+# --version reports.
+[tool.hatch.version]
+path = "src/cmake2md/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cmake2md"]

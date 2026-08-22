@@ -11,7 +11,14 @@ and uses jinja templates to generate final documentation.
 
 # Development
 
+## Python
+
 Python, mypy, ruff.
+
+* Use annotations.
+* Do not use `Any`, always set the strict direct type.
+
+## Generic
 
 * Do not add new external dependencies without explicit user permission.
 * Be careful when wording user output. Error message must describe what's wrong
@@ -31,6 +38,8 @@ Python, mypy, ruff.
 - DRY, KISS, SOLID.
 * Prefer SRP, avoid god objects.
 * Use OOP where appropriate.
+
+## Comments
 
 * Code comments have to describe "why", not "how".
 * Code comments must not duplicate the code, must be brief.

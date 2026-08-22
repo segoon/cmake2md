@@ -1,7 +1,8 @@
-"""Extraction of documented functions and commands from CMake sources."""
+"""Extraction of documented functions, macros and commands from CMake sources."""
 
 import dataclasses
 import pathlib
+import textwrap
 
 import tree_sitter_cmake as tscmake
 from tree_sitter import Language
@@ -15,16 +16,28 @@ from .errors import Cmake2mdError
 
 CMAKE_LANGUAGE = Language(tscmake.language())
 PARSER = Parser(CMAKE_LANGUAGE)
-FUNCTION_QUERY = Query(
+#: Definitions that carry documentation.  The two branches are one alternation
+#: rather than two queries so that symbols come out in source order; the kind
+#: is read back off the captured node's type.
+SYMBOL_QUERY = Query(
     CMAKE_LANGUAGE,
     """
+[
   (function_def
     (function_command
       (function)
       (argument_list
         (argument
           (unquoted_argument))) @arguments)
-   ) @function_def
+   ) @definition
+  (macro_def
+    (macro_command
+      (macro)
+      (argument_list
+        (argument
+          (unquoted_argument))) @arguments)
+   ) @definition
+]
         """,
 )
 COMMAND_QUERY = Query(
@@ -77,7 +90,9 @@ def get_comments(file: File, node: Node) -> list[str]:
     """Collect the run of comment lines immediately above `node`.
 
     A blank line ends the run, so an unrelated comment further up the file
-    is not absorbed into the documentation of this symbol.
+    is not absorbed into the documentation of this symbol.  The block is
+    dedented as a whole, so that the space in the conventional '# ' goes away
+    while indentation *within* the comment (lists, code blocks) survives.
     """
     comments = []
 
@@ -90,27 +105,29 @@ def get_comments(file: File, node: Node) -> list[str]:
         comments.append(file.get_text(prev).removeprefix('#'))
         current = prev
         prev = current.prev_sibling
-    return list(reversed(comments))
+    comments.reverse()
+    return textwrap.dedent('\n'.join(comments)).split('\n') if comments else []
 
 
-def extract_functions(file: File) -> list[Symbol]:
+def extract_symbols(file: File) -> list[Symbol]:
+    """Extract every function() and macro() definition, documented or not."""
     symbols = []
 
-    query_cursor = QueryCursor(FUNCTION_QUERY)
+    query_cursor = QueryCursor(SYMBOL_QUERY)
     matches = query_cursor.matches(file.tree.root_node)
     for _, captures in matches:
         argument_list = captures['arguments'][0]
-        function = argument_list.children[0]
+        name = argument_list.children[0]
 
-        function_def = captures['function_def'][0]
+        definition = captures['definition'][0]
 
         symbols.append(
             Symbol(
-                name=file.get_text(function),
-                type_='function',
-                comments=get_comments(file, function_def),
+                name=file.get_text(name),
+                type_=definition.type.removesuffix('_def'),
+                comments=get_comments(file, definition),
                 filepath=file.filepath,
-                line=function_def.start_point.row + 1,
+                line=definition.start_point.row + 1,
             )
         )
     return symbols
@@ -142,4 +159,15 @@ def parse_file(path: str | pathlib.Path) -> File:
         content = pathlib.Path(path).read_bytes()
     except OSError as exc:
         raise Cmake2mdError(f'cannot read {path}: {exc.strerror}') from exc
+
+    # Checked once, up front, so that the per-node decoding in File.get_text
+    # cannot fail later on and surface as a traceback.
+    try:
+        content.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        line = content.count(b'\n', 0, exc.start) + 1
+        raise Cmake2mdError(
+            f'{path}:{line}: not valid UTF-8; cmake2md expects UTF-8 sources'
+        ) from exc
+
     return File(filepath=str(path), content=content, tree=PARSER.parse(content))

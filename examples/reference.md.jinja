@@ -2,12 +2,13 @@
   A generic cmake2md template.
 
   Available context:
-    symbols   - documented function()s
-    commands  - every top-level command call (option(), set(), ...)
+    symbols   - every function() and macro(), documented or not
+    commands  - every command call (option(), set(), ...)
 
   Both are dicts with: name, comments, group, location, filepath, line,
   pretty, and doc (the parsed comment: description, args, options, params,
-  multi_params). Commands additionally carry args, the raw argument list.
+  multi_params). Symbols also carry type_ ('function' or 'macro'); commands
+  carry args, the raw argument list.
 #}
 {% macro option_row(cmd) -%}
 | `{{ cmd.args[0] }}` | {{ cmd.args[1] | unquote | oneline | md_escape }} | `{{ cmd.args[2] | unquote | escape }}` |
@@ -29,7 +30,13 @@
 
 ## Functions
 
-{% for symbol in symbols %}
+{% for symbol in symbols | documented if symbol.type_ == 'function' %}
+{{ symbol.pretty }}
+{% endfor %}
+
+## Macros
+
+{% for symbol in symbols | documented if symbol.type_ == 'macro' %}
 {{ symbol.pretty }}
 {% endfor %}
 

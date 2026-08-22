@@ -67,9 +67,37 @@ def test_multiple_template_output_pairs(cmake_file, template, tmp_path):
     assert first.read_text(encoding='utf-8') == second.read_text(encoding='utf-8')
 
 
+def test_macros_are_documented_too(cmake_file, template, tmp_path):
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, cmake_file) == 0
+    assert '## example_warn' in out.read_text(encoding='utf-8')
+
+
 def test_builtin_template_is_usable_by_name(cmake_file, tmp_path):
     out = tmp_path / 'out.md'
     assert run('-t', 'function.md.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## example_add_library' in text
+    assert '## example_warn' in text
+    # The built-in template filters undocumented symbols out.
+    assert 'undocumented_function' not in text
+
+
+def test_version_is_printed(capsys):
+    from cmake2md import __version__
+
+    with pytest.raises(SystemExit) as exc:
+        run('--version')
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f'cmake2md {__version__}'
+
+
+def test_unknown_template_says_where_it_looked(cmake_file, tmp_path, capsys):
+    assert run('-t', 'nosuch.md.jinja', '-o', tmp_path / 'out.md', cmake_file) == 1
+    err = capsys.readouterr().err
+    assert 'template not found: nosuch.md.jinja' in err
+    assert 'built-in templates: function.md.jinja' in err
 
 
 def test_template_dir_is_searched(cmake_file, template, tmp_path):
@@ -145,6 +173,13 @@ def test_unreadable_source_is_reported(template, tmp_path, capsys):
     assert 'cannot read' in capsys.readouterr().err
 
 
+def test_non_utf8_source_is_reported_without_a_traceback(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_bytes('# caf\xe9\nfunction(f)\nendfunction()\n'.encode('latin-1'))
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 1
+    assert 'not valid UTF-8' in capsys.readouterr().err
+
+
 def test_example_renders(tmp_path):
     root = pathlib.Path(__file__).resolve().parent.parent
     out = tmp_path / 'reference.md'
@@ -160,7 +195,12 @@ def test_example_renders(tmp_path):
     )
     text = out.read_text(encoding='utf-8')
     assert '## example_add_library' in text
+    assert '## example_fail' in text
     assert 'maintainer@example.com' in text
     assert 'a literal @@' not in text
     assert '`EXAMPLE_BUILD_TESTS`' in text
     assert '`EXAMPLE_TOOLCHAIN_DIR`' in text
+    # An @ingroup merely mentioned in prose must not group the option away
+    # from the ungrouped table.
+    assert '`EXAMPLE_STATIC`' in text
+    assert '_example_internal_helper' not in text
