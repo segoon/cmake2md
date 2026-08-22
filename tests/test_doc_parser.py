@@ -61,7 +61,7 @@ def test_params_are_split_by_kind_and_keep_order():
 
 
 def test_return_documents_an_output_variable():
-    doc = parse(' @return RESULT the computed value')
+    doc = parse(' @set_parent_scope RESULT the computed value')
     assert doc.returns[0].kind == ParamKind.OutVar
     assert doc.returns[0].name == 'RESULT'
     assert doc.returns[0].description == 'the computed value'

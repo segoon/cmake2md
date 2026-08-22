@@ -97,14 +97,16 @@ endfunction()
 
 
 def test_a_documented_output_variable_the_code_does_not_set_is_reported(messages):
-    assert messages(RETURNING.format(tags='@return RESULT r\n# @return MISSING m')) == [
-        'MISSING is documented as @return but compute does not set it'
-    ]
+    assert messages(
+        RETURNING.format(
+            tags='@set_parent_scope RESULT r\n# @set_parent_scope MISSING m'
+        )
+    ) == ['MISSING is documented as @set_parent_scope but compute does not set it']
 
 
 def test_an_undocumented_output_variable_is_reported(messages):
     assert messages(RETURNING.format(tags='@arg NAME n')) == [
-        'compute sets RESULT but it is not documented; add @return RESULT'
+        'compute sets RESULT but it is not documented; add @set_parent_scope RESULT'
     ]
 
 

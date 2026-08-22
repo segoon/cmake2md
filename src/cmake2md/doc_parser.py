@@ -26,9 +26,9 @@ class ParamKind(str, enum.Enum):
     Option = 'option'
     SingleArgParam = 'param'
     MultiArgParam = 'multiparam'
-    #: A variable the definition sets in its caller's scope: CMake's way of
-    #: returning a value, so it is documented like a parameter.
-    OutVar = 'return'
+    #: A variable the definition sets in its caller's scope.  Not called
+    #: 'return' after CMake's return(), which does something else entirely.
+    OutVar = 'set_parent_scope'
 
 
 class TagText(enum.Enum):

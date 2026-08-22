@@ -4,6 +4,10 @@
 
 ### Added
 
+- A config file: the `[tool.cmake2md]` table of `pyproject.toml`, or any TOML
+  file named with `--config`, so a CI step is `cmake2md` and nothing else. The
+  command line always wins over it. It reads `tomllib`, so it needs Python
+  3.11; on 3.10 it says so rather than pulling in a dependency.
 - Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
   including CMake's own `#[==[.rst:` house style. A symbol documented that way
   used to read as undocumented, silently.
@@ -74,6 +78,8 @@
 
 ### Changed
 
+- `@return` is now `@set_parent_scope`, which is what it documents: CMake's
+  `return()` does something else entirely.
 - `--check` prints a diff of what differs instead of only reporting that
   something does.
 - `--strict` now promotes every documentation warning to an error, not only a

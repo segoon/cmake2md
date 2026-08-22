@@ -86,7 +86,7 @@ endfunction()
 # caller's scope, so cmake2md checks both against this comment.
 #
 # @arg NAME the toolchain to look up
-# @return EXAMPLE_TOOLCHAIN_VERSION the version that was found
+# @set_parent_scope EXAMPLE_TOOLCHAIN_VERSION the version that was found
 function(example_toolchain_version NAME)
     set(EXAMPLE_TOOLCHAIN_VERSION "1.0" PARENT_SCOPE)
 endfunction()

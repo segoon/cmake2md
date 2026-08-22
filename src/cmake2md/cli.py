@@ -14,6 +14,7 @@ import jinja2
 
 from . import __version__
 from . import checks
+from . import config
 from . import doc_parser
 from . import parse
 from . import rendering
@@ -71,6 +72,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=[],
         metavar='DIR',
         help='Additional directory to search for templates. Repeatable.',
+    )
+    parser.add_argument(
+        '-c',
+        '--config',
+        metavar='FILE',
+        help=(
+            'Read the arguments from the [tool.cmake2md] table of this TOML '
+            f'file. Defaults to {config.DEFAULT_FILE} when it has such a '
+            'table. Arguments given on the command line win.'
+        ),
     )
     parser.add_argument(
         '--inject',
@@ -139,6 +150,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     return parser
+
+
+def apply_config(args: argparse.Namespace) -> None:
+    """Fill in from the config file whatever the command line left unsaid.
+
+    The command line wins, always: a config file is where a project records
+    what it usually does, not something that can override what was just asked
+    for.
+    """
+    explicit = args.config is not None
+    path = pathlib.Path(args.config or config.DEFAULT_FILE)
+    if not explicit and not path.is_file():
+        return
+
+    if explicit and not path.is_file():
+        raise UsageError(f'no config file at {path}')
+
+    for key, value in config.load(path).items():
+        current = getattr(args, key, None)
+        # A list argument that was not given is empty, and a flag is False;
+        # either way, nothing was said on the command line.
+        if not current:
+            setattr(args, key, value)
 
 
 def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
@@ -382,6 +416,7 @@ def run(args: argparse.Namespace) -> int:
     if args.list_templates:
         return list_templates()
 
+    apply_config(args)
     pairs = validate_args(args)
 
     specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]

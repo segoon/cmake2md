@@ -760,3 +760,88 @@ def test_list_templates_names_both_builtins(capsys):
     out = capsys.readouterr().out
     assert 'function.md.jinja' in out
     assert 'reference.md.jinja' in out
+
+
+CONFIG = """\
+[project]
+name = "demo"
+
+[tool.cmake2md]
+template = ["function.md.jinja"]
+output = ["docs/reference.md"]
+path = ["."]
+"""
+
+
+def test_config_file_supplies_the_arguments(cmake_file, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(CONFIG, encoding='utf-8')
+    assert run() == 0
+    text = (tmp_path / 'docs' / 'reference.md').read_text(encoding='utf-8')
+    assert '## example_add_library' in text
+
+
+def test_the_command_line_wins_over_the_config_file(
+    cmake_file, template, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(CONFIG, encoding='utf-8')
+    out = tmp_path / 'elsewhere.md'
+    assert run('-t', template, '-o', out) == 0
+    assert out.exists()
+    assert not (tmp_path / 'docs').exists()
+
+
+def test_a_pyproject_without_our_table_is_not_a_config_file(
+    cmake_file, template, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[project]\nname = "x"\n', encoding='utf-8'
+    )
+    assert run() == 1
+    assert 'no --template given' in capsys.readouterr().err
+
+
+def test_an_unknown_setting_names_the_ones_there_are(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\nnosuch = 1\n', encoding='utf-8'
+    )
+    assert run() == 1
+    err = capsys.readouterr().err
+    assert 'has no setting called nosuch' in err
+    assert 'template' in err
+
+
+def test_a_named_config_file_must_exist(tmp_path, capsys):
+    assert run('--config', tmp_path / 'nope.toml') == 1
+    assert 'no config file at' in capsys.readouterr().err
+
+
+def test_a_lone_string_is_accepted_where_a_list_belongs(
+    cmake_file, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
+        'output = "out.md"\npath = "."\n',
+        encoding='utf-8',
+    )
+    assert run() == 0
+    assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_a_dash_in_a_setting_name_reads_as_an_underscore(
+    cmake_file, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
+        'output = "out.md"\npath = "."\nrequire-docs = true\n',
+        encoding='utf-8',
+    )
+    # The fixture has an undocumented function in it, which is what
+    # require-docs is there to catch.
+    assert run() == 1
+    assert 'undocumented' in capsys.readouterr().err

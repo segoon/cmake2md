@@ -94,7 +94,7 @@ endfunction()
 | `@option NAME` | function, macro | Valueless flag. |
 | `@param NAME` | function, macro | Keyword taking a single value. |
 | `@multiparam NAME` | function, macro | Keyword taking one or more values. |
-| `@return NAME` | function, macro | Variable set in the caller's scope: CMake's way of returning a value. |
+| `@set_parent_scope NAME` | function, macro | Variable the symbol sets in its caller's scope, which is how CMake hands a result back. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@type NAME` | function, macro | What the *preceding* parameter's value should be. |
 | `@default VALUE` | function, macro | What the *preceding* parameter is worth when left out. |
@@ -155,7 +155,7 @@ takes SOURCES but it is not documented; add @multiparam SOURCES
 Four things are read out of the code: both call forms of
 `cmake_parse_arguments()`, the named parameters of `function(f NAME TYPE)`,
 `set(VAR ... PARENT_SCOPE)` and `return(PROPAGATE VAR)` — the last two being
-what `@return` documents.
+what `@set_parent_scope` documents.
 
 What the code does not state plainly is never guessed at, and so never warned
 about. A keyword list built from a variable, a body with two
@@ -395,20 +395,26 @@ A GitHub Action:
 
 ## Development
 
-```shell
-make install    # pip install -e '.[dev]'
-make check      # lint, type check and test, as CI does
-```
+See [DEVELOPMENT.md](DEVELOPMENT.md): the workflow, how the modules fit
+together, and how to add a tag.
 
-`make help` lists the rest: `test`, `lint`, `format`, `typecheck`, `example`
-(regenerate `examples/reference.md`), `dist`, `clean` and, for maintainers,
-`release-check`, `publish-test` and `publish`.
+## Prior art
 
-Every pull request runs `make check example-check` on Linux, the test suite on
-Linux, macOS and Windows for each supported Python version, and a packaging
-smoke test. The `ci-ok` job summarises all of them; it is the single check to
-require in the branch protection rule, so that changing the test matrix never
-means editing that rule.
+cmake2md is a Markdown generator for CMake with a checking pass, which is a
+gap between two neighbourhoods rather than new ground:
+
+| | |
+|---|---|
+| [Doxygen](https://www.doxygen.nl/) | Where the `@tag` vocabulary comes from, down to a paragraph tag ending at a blank line. It has no CMake parser. |
+| [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2md does, and emits reStructuredText for Sphinx rather than Markdown. |
+| CMake's own [Sphinx domain](https://github.com/Kitware/CMake/blob/master/Help/dev/documentation.rst) | Where the `#[==[.rst:` comment style comes from, and how CMake's own modules are documented. |
+| [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
+| [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |
+| [shdoc](https://github.com/reconquest/shdoc) | The same shape of problem for shell: a dynamic language whose interface is only stated in comments. |
+
+Where cmake2md differs from all of them is the checking pass: the doc comment
+is compared against what the CMake code actually accepts, and the two are
+reported when they disagree.
 
 ## License
 

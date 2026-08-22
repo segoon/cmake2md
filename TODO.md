@@ -8,11 +8,7 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Housekeeping
 
-- split out README.md -> DEVELOPMENT.md
 - integrate cmake2md into CMakeLists.txt
-- @return -> @set_parent_scope
-- add "inspired by": doxygen, ...
-- compare with alternatives from other languages
 
 ## P1 — Source-derived signatures (done)
 
@@ -20,7 +16,7 @@ hands templates raw argument lists, which is where every comparable tool
 - [x] read the positional parameters declared by `function(f NAME TYPE)`
 - [x] warn when the doc comment and the code disagree; `--strict` fails
 - [x] output variables: `set(X ... PARENT_SCOPE)` and `return(PROPAGATE X)`,
-      documented with `@return`
+      documented with `@set_parent_scope`
 
 ## P2 — Typed model for commands (done)
 
@@ -51,13 +47,13 @@ hands templates raw argument lists, which is where every comparable tool
 - [x] parameter types and default values, from `@type` and `@default`
 - [x] file-level documentation (`@file`), exposed as the `files` list
 
-## P4 — Output and CI integration
+## P4 — Output and CI integration (done)
 
 - [x] JSON dump of the model, as a stable versioned schema
 - [x] inject into an existing README between markers, as terraform-docs does
-- config file: `[tool.cmake2md]` in `pyproject.toml`, instead of N paired
-  `--template`/`--output` arguments in CI (`tomllib` is stdlib on 3.11+, so
-  only 3.10 needs a fallback — ask before adding the dependency)
+- [x] config file: `[tool.cmake2md]` in `pyproject.toml`, instead of N paired
+      `--template`/`--output` arguments in CI. Uses `tomllib`, so it needs
+      Python 3.11; on 3.10 it says so rather than pulling in `tomli`.
 - [x] `--require-docs`: fail on an undocumented public symbol, like
       rustdoc's `missing_docs`
 - [x] show a diff in `--check` instead of only "out of date"
