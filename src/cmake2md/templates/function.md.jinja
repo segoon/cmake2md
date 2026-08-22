@@ -1,9 +1,17 @@
+{#
+  Renders a single function.
+
+  Used two ways: cmake2md renders it once per function to build
+  `symbol.pretty`, and it also works as a whole-document template
+  (`--template function.md.jinja`), where it documents every function.
+#}
 {% macro required(r) %}
 {%- if not r %}[{% endif %}
 {{- caller() }}
 {%- if not r %}]{% endif %}
 {%- endmacro -%}
 
+{% macro function(symbol) %}
 ## {{ symbol.name }}
 
 {{ symbol.doc.description }}
@@ -36,3 +44,12 @@
 {%- for arg in symbol.doc.multi_params %}
 * **{{ arg.name }} <value>...** {{ arg.description }}
 {%- endfor %}
+{%- endmacro -%}
+
+{% if symbol is defined %}
+{{- function(symbol) }}
+{%- else %}
+{%- for symbol in symbols %}
+{{ function(symbol) }}
+{%- endfor %}
+{%- endif %}

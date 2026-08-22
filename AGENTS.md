@@ -25,12 +25,16 @@ Python, mypy, ruff.
   it should be extendable. Even if some feature is not yet planned, it might be planned soon.
 * If you catch a bug in the code, write a regression test for that.
 * After you add/edit a file, check the whole file for code duplication in tests. Don't leave similar boilerplate.
-- When fixing a bug, search for similar bugs in the nearby code
-- When found a bug, elaborate whether it is possible to redesign the system to make such bugs impossible
+* When fixing a bug, search for similar bugs in the nearby code
+* When found a bug, elaborate whether it is possible to redesign the system to make such bugs impossible
 
 - DRY, KISS, SOLID
 * Prefer SRP, avoid god objects.
 * Use OOP where appropriate.
+
+* Code comments have to describe "why", not "how"
+* Code comments must not duplicate the code, must be brief.
+* Avoid obvious comments.
 
 ## Runtime
 

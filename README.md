@@ -124,10 +124,17 @@ has `.name`, `.description`, `.required` and `.kind`.
 | `only_group(name)` | Keep only entries in the given `@ingroup` (use `None` for ungrouped). |
 | `render` | Concatenate the `pretty` field of a collection. |
 
-### Overriding the built-in template
+### The built-in template
 
 `symbol.pretty` is produced by the packaged `function.md.jinja`. Put a file of
 that name in a `--template-dir` (or the working directory) to replace it.
+
+It also works as a whole document on its own, which documents every function
+and needs no template of your own:
+
+```sh
+cmake2md --template function.md.jinja --output docs/functions.md CMakeLists.txt
+```
 
 ## Command line
 

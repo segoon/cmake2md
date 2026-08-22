@@ -11,7 +11,8 @@ First release as a standalone project, extracted from the
 - Templates are resolved from `--template-dir`, the working directory and the
   packaged built-ins, so projects can ship their own without vendoring
   cmake2md. The built-in `function.md.jinja` can be shadowed to change how
-  `symbol.pretty` is rendered.
+  `symbol.pretty` is rendered, and can itself be passed to `--template` to
+  document every function without writing a template.
 - `@ingroup` now works on functions as well as commands; `only_group` applies
   uniformly to `symbols` and `commands`.
 - `--strict` turns unknown tags into errors; by default they are kept as
