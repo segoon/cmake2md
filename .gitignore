@@ -10,3 +10,4 @@ venv/
 .mypy_cache/
 .coverage
 htmlcov/
+.claude/settings.local.json

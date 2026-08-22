@@ -61,6 +61,11 @@ path = "src/cmake2md/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/cmake2md"]
 
+# The sdist otherwise mirrors the repository, which would publish local
+# developer-tool state that is not part of the project.
+[tool.hatch.build.targets.sdist]
+exclude = [".claude"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
