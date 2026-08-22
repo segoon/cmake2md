@@ -8,8 +8,11 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Housekeeping
 
-- split README.md -> DEVELOPMENT.md
+- split out README.md -> DEVELOPMENT.md
 - integrate cmake2md into CMakeLists.txt
+- @return -> @set_parent_scope
+- add "inspired by": doxygen, ...
+- compare with alternatives from other languages
 
 ## P1 — Source-derived signatures (done)
 
