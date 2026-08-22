@@ -6,14 +6,19 @@ and uses jinja templates to generate final documentation.
 
 # Core documentation
 
-- @TODO.md - the plans.
 - @README.md - the main user documentation.
+- @TODO.md - the plans.
 
 # Development
 
+* .github
+* Makefile
+* tests/
+* examples/ - a generic example of cmake2md user
+
 ## Python
 
-Python, mypy, ruff.
+Python, mypy, ruff, pyproject.toml.
 
 * Use annotations.
 * Do not use `Any`, always set the strict direct type.
