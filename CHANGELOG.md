@@ -4,6 +4,10 @@
 
 ### Added
 
+- `cmake/cmake2md.cmake`, a module whose `cmake2md_generate()` adds a build
+  target that runs cmake2md, so a CMake project can document itself from its
+  own build. It is written with cmake2md's own tags, and the test suite holds
+  it to `--strict`.
 - A config file: the `[tool.cmake2md]` table of `pyproject.toml`, or any TOML
   file named with `--config`, so a CI step is `cmake2md` and nothing else. The
   command line always wins over it. It reads `tomllib`, so it needs Python

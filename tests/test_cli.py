@@ -845,3 +845,24 @@ def test_a_dash_in_a_setting_name_reads_as_an_underscore(
     # require-docs is there to catch.
     assert run() == 1
     assert 'undocumented' in capsys.readouterr().err
+
+
+def test_the_shipped_cmake_module_documents_itself(tmp_path):
+    # The module is written with cmake2md's own tags, so it is both the
+    # integration point and a worked example; --strict keeps the two honest.
+    root = pathlib.Path(__file__).resolve().parent.parent
+    out = tmp_path / 'module.md'
+    assert (
+        run(
+            '--strict',
+            '-t',
+            'reference.md.jinja',
+            '-o',
+            out,
+            root / 'cmake' / 'cmake2md.cmake',
+        )
+        == 0
+    )
+    text = out.read_text(encoding='utf-8')
+    assert '## cmake2md_generate' in text
+    assert '**TARGET <value>** the name of the target to add' in text

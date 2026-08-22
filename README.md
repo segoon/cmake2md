@@ -369,6 +369,31 @@ around them alone. It composes with `--check`.
 `schema_version` is bumped when a field disappears or changes meaning, never
 when one is added, so a consumer must ignore the fields it does not know.
 
+## From CMake
+
+`cmake/cmake2md.cmake` adds a target that runs cmake2md as part of the build,
+so a project documents its own CMake code without a separate script to
+remember. Copy it into your module path, or fetch it:
+
+```cmake
+include(cmake2md)
+
+cmake2md_generate(
+    TARGET docs
+    TEMPLATE reference.md.jinja
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
+    SOURCES cmake/helpers.cmake
+)
+```
+
+`cmake --build build --target docs` regenerates the documentation; the target
+is not part of the default build, since documentation that regenerates on
+every build shows up in every diff. `CHECK` verifies it is up to date instead
+of writing it, and `ALL` opts into the default build.
+
+The module is documented with cmake2md's own tags, so it also serves as a
+worked example.
+
 ## In CI
 
 A pre-commit hook:

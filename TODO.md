@@ -4,11 +4,11 @@ Ordered roadmap. The rationale, and the comparison with the documentation
 generators of other languages that produced it, are in the plan this list came
 from; the short version is that cmake2md derives nothing from the code and
 hands templates raw argument lists, which is where every comparable tool
-(CMinx, terraform-docs, helm-docs, Doxygen, rustdoc) is ahead of it.
+(CMinx, terraform-docs, helm-docs, Doxygen, rustdoc) was ahead of it.
 
-## Housekeeping
-
-- integrate cmake2md into CMakeLists.txt
+Everything below is done. What comes next is a 0.2.0 release: the tag
+vocabulary and the template context both changed, so the version needs to say
+so before anything else is added.
 
 ## P1 — Source-derived signatures (done)
 
