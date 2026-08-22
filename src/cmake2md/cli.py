@@ -2,6 +2,7 @@
 
 import argparse
 import dataclasses
+import glob
 import pathlib
 import sys
 from collections.abc import Sequence
@@ -17,6 +18,11 @@ from . import tag_lexer
 from .errors import Cmake2mdError
 from .errors import ParseError
 from .errors import UsageError
+
+#: The --output value that means "write to stdout" instead of to a file.
+STDOUT = '-'
+#: What a directory given as CMAKE_FILE is searched for.
+SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -77,7 +83,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        'path', nargs='+', metavar='CMAKE_FILE', help='CMake sources to read.'
+        '--list-templates',
+        action='store_true',
+        help='List the built-in template names and exit.',
+    )
+    parser.add_argument(
+        'path',
+        nargs='*',
+        metavar='CMAKE_FILE',
+        help=(
+            'CMake sources to read: files, directories to search for '
+            'CMakeLists.txt and *.cmake, or glob patterns.'
+        ),
     )
     return parser
 
@@ -85,6 +102,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
     if not args.template:
         raise UsageError('no --template given, nothing to render')
+    if not args.path:
+        raise UsageError('no CMAKE_FILE given, nothing to read')
     if len(args.template) != len(args.output):
         if not args.output and any(':' in t for t in args.template):
             raise UsageError(
@@ -95,8 +114,52 @@ def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
             f'got {len(args.template)} --template and {len(args.output)} '
             '--output arguments; each template needs exactly one output'
         )
+    if args.check and STDOUT in args.output:
+        raise UsageError(f'--output {STDOUT} writes nothing to check')
+
+    # Two templates rendering into one file: one of the two results would be
+    # silently thrown away, which can only be a mistake.
+    seen: dict[str, str] = {}
+    for template, output in zip(args.template, args.output, strict=True):
+        if output == STDOUT:
+            continue
+        key = str(pathlib.Path(output).resolve())
+        if key in seen:
+            raise UsageError(
+                f'--output {output} is given twice, for {seen[key]} and '
+                f'{template}; each template needs its own output'
+            )
+        seen[key] = template
+
     # The lengths are equal by the check above.
     return list(zip(args.template, args.output, strict=True))
+
+
+def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
+    """Expand `paths` into the CMake files to read.
+
+    A directory is searched, and a pattern expanded, because the shells that
+    would otherwise do it (and Windows' do not) are not always in the picture:
+    cmake2md is typically run from a build system or a CI step.
+    """
+    found: list[pathlib.Path] = []
+    for path in paths:
+        candidate = pathlib.Path(path)
+        if candidate.is_dir():
+            matches = sorted(
+                match
+                for pattern in SOURCE_GLOBS
+                for match in candidate.rglob(pattern)
+                if not any(part.startswith('.') for part in match.parts)
+            )
+        elif candidate.exists():
+            matches = [candidate]
+        else:
+            matches = sorted(pathlib.Path(m) for m in glob.glob(path, recursive=True))
+        if not matches:
+            raise UsageError(f'no CMake sources found at {path}')
+        found += matches
+    return found
 
 
 def enrich(
@@ -106,12 +169,17 @@ def enrich(
 ) -> dict[str, Any]:
     """Attach the parsed doc comment and a rendered form to `item`."""
     try:
-        doc = doc_parser.parse(tag_lexer.tokenize(item.comments), strict=strict)
+        doc = doc_parser.parse(
+            tag_lexer.tokenize(item.comments),
+            strict=strict,
+            first_line=item.comments_line or item.line,
+        )
     except ParseError as exc:
-        raise exc.at(item.location) from None
+        raise exc.at(item.location_at(exc.line)) from None
 
     for warning in doc.warnings:
-        print(f'{item.location}: warning: {warning}', file=sys.stderr)
+        location = item.location_at(warning.line)
+        print(f'{location}: warning: {warning.message}', file=sys.stderr)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -124,6 +192,24 @@ def enrich(
         # nothing for the function template to do with it.
         res['pretty'] = doc.description
     return res
+
+
+def warn_duplicate_symbols(symbols: Sequence[parse.Symbol]) -> None:
+    """Report a name defined more than once across the sources read.
+
+    CMake allows the redefinition, so this is a warning: the documentation
+    would otherwise describe the same name twice with no hint of which
+    definition wins.
+    """
+    first_seen: dict[str, parse.Symbol] = {}
+    for symbol in symbols:
+        earlier = first_seen.setdefault(symbol.name, symbol)
+        if earlier is not symbol:
+            print(
+                f'{symbol.location}: warning: {symbol.name} is already '
+                f'defined at {earlier.location}',
+                file=sys.stderr,
+            )
 
 
 def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
@@ -144,7 +230,16 @@ def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
     return True
 
 
+def list_templates() -> int:
+    for name in sorted(rendering.builtin_loader().list_templates()):
+        print(name)
+    return 0
+
+
 def run(args: argparse.Namespace) -> int:
+    if args.list_templates:
+        return list_templates()
+
     pairs = validate_args(args)
 
     specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]
@@ -162,10 +257,11 @@ def run(args: argparse.Namespace) -> int:
 
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
-    for path in args.path:
+    for path in collect_sources(args.path):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
+    warn_duplicate_symbols(symbols)
 
     context = {
         'symbols': [enrich(s, function_template, args.strict) for s in symbols],
@@ -176,7 +272,10 @@ def run(args: argparse.Namespace) -> int:
     for (_, output), (_, name) in zip(pairs, specs, strict=True):
         template = rendering.load_template(env, name, search_dirs)
         content = rendering.render_document(template, context)
-        ok &= write_output(pathlib.Path(output), content, args.check)
+        if output == STDOUT:
+            sys.stdout.write(content)
+        else:
+            ok &= write_output(pathlib.Path(output), content, args.check)
     return 0 if ok else 1
 
 

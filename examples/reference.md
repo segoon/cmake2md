@@ -28,7 +28,12 @@ example_add_library(
 
 ## example_add_test
 
+**Deprecated.**
+
 Registers a test executable.
+
+use example_add_library(... SOURCES ...) with EXCLUDE_FROM_ALL
+instead.
 
 ```
 example_add_test(

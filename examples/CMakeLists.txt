@@ -42,6 +42,9 @@ endfunction()
 
 # Registers a test executable.
 #
+# @deprecated use example_add_library(... SOURCES ...) with EXCLUDE_FROM_ALL
+# instead.
+#
 # @arg NAME the name of the test
 # @multiparam SOURCES the source files to compile
 # @param TIMEOUT seconds before the test is considered hung

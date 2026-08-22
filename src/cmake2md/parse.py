@@ -1,5 +1,6 @@
 """Extraction of documented functions, macros and commands from CMake sources."""
 
+import abc
 import dataclasses
 import pathlib
 import textwrap
@@ -26,26 +27,25 @@ SYMBOL_QUERY = Query(
   (function_def
     (function_command
       (function)
-      (argument_list
-        (argument
-          (unquoted_argument))) @arguments)
+      (argument_list) @arguments)
    ) @definition
   (macro_def
     (macro_command
       (macro)
-      (argument_list
-        (argument
-          (unquoted_argument))) @arguments)
+      (argument_list) @arguments)
    ) @definition
 ]
         """,
 )
+#: The argument list is optional: a call without arguments — enable_testing(),
+#: project() — has no argument_list node at all, and requiring one used to drop
+#: such calls together with their documentation.
 COMMAND_QUERY = Query(
     CMAKE_LANGUAGE,
     """
   (normal_command
     (identifier) @name
-    (argument_list) @arguments) @command
+    (argument_list)? @arguments) @command
         """,
 )
 
@@ -61,32 +61,60 @@ class File:
 
 
 @dataclasses.dataclass
-class Symbol:
+class Documented(abc.ABC):
+    """Something a doc comment can be attached to."""
+
     name: str
-    type_: str
     comments: list[str]
+    #: File line the comment block starts on; 0 when there is no comment.
+    comments_line: int
     filepath: str
     line: int
 
     @property
+    @abc.abstractmethod
+    def kind(self) -> str:
+        """How this entity is called in diagnostics."""
+
+    @property
     def location(self) -> str:
-        return f'{self.filepath}:{self.line}: {self.type_} {self.name}'
+        return self.location_at(0)
+
+    def location_at(self, line: int) -> str:
+        """Point at `line`, or at the definition itself when it is unknown.
+
+        Diagnostics about a tag know the line the tag is on, which is inside
+        the comment block and so above `self.line`.
+        """
+        return f'{self.filepath}:{line or self.line}: {self.kind} {self.name}'
 
 
 @dataclasses.dataclass
-class Command:
-    name: str
-    args: list[str]
-    comments: list[str]
-    filepath: str
-    line: int
+class Symbol(Documented):
+    type_: str
 
     @property
-    def location(self) -> str:
-        return f'{self.filepath}:{self.line}: command {self.name}'
+    def kind(self) -> str:
+        return self.type_
 
 
-def get_comments(file: File, node: Node) -> list[str]:
+@dataclasses.dataclass
+class Command(Documented):
+    args: list[str]
+
+    @property
+    def kind(self) -> str:
+        return 'command'
+
+
+@dataclasses.dataclass
+class CommentBlock:
+    lines: list[str]
+    #: File line the block starts on; 0 when there is no comment.
+    line: int
+
+
+def get_comments(file: File, node: Node) -> CommentBlock:
     """Collect the run of comment lines immediately above `node`.
 
     A blank line ends the run, so an unrelated comment further up the file is
@@ -105,8 +133,41 @@ def get_comments(file: File, node: Node) -> list[str]:
         comments.append(file.get_text(prev).removeprefix('#'))
         current = prev
         prev = current.prev_sibling
+
+    if not comments:
+        return CommentBlock(lines=[], line=0)
     comments.reverse()
-    return textwrap.dedent('\n'.join(comments)).split('\n') if comments else []
+    # `current` walked up to the topmost comment of the run.
+    return CommentBlock(
+        lines=textwrap.dedent('\n'.join(comments)).split('\n'),
+        line=current.start_point.row + 1,
+    )
+
+
+def argument_name(file: File, argument: Node) -> str:
+    """Read an argument as a name, quoted or not.
+
+    function("foo") is legal CMake, and the quotes are not part of the name.
+    The grammar already separates them out, so take the text the quotes wrap
+    rather than stripping characters back off.
+    """
+    child = argument.children[0] if argument.children else None
+    if child is not None and child.type == 'quoted_argument':
+        # An empty "" has no quoted_element between its quotes.
+        elements = [c for c in child.children if c.type == 'quoted_element']
+        return file.get_text(elements[0]) if elements else ''
+    return file.get_text(argument)
+
+
+def arguments_of(file: File, argument_list: Node | None) -> list[Node]:
+    """The `argument` children of an argument list, if it has one at all.
+
+    Filtered by type: an argument list may also contain comments, which are
+    not arguments.
+    """
+    if argument_list is None:
+        return []
+    return [child for child in argument_list.children if child.type == 'argument']
 
 
 def extract_symbols(file: File) -> list[Symbol]:
@@ -116,16 +177,20 @@ def extract_symbols(file: File) -> list[Symbol]:
     query_cursor = QueryCursor(SYMBOL_QUERY)
     matches = query_cursor.matches(file.tree.root_node)
     for _, captures in matches:
-        argument_list = captures['arguments'][0]
-        name = argument_list.children[0]
+        arguments = arguments_of(file, captures['arguments'][0])
+        if not arguments:
+            # function() without a name: malformed, and nothing to document.
+            continue
 
         definition = captures['definition'][0]
+        block = get_comments(file, definition)
 
         symbols.append(
             Symbol(
-                name=file.get_text(name),
+                name=argument_name(file, arguments[0]),
                 type_=definition.type.removesuffix('_def'),
-                comments=get_comments(file, definition),
+                comments=block.lines,
+                comments_line=block.line,
                 filepath=file.filepath,
                 line=definition.start_point.row + 1,
             )
@@ -140,13 +205,16 @@ def extract_commands(file: File) -> list[Command]:
     matches = query_cursor.matches(file.tree.root_node)
     for _, captures in matches:
         command = captures['command'][0]
-        arguments = captures['arguments'][0]
+        captured = captures.get('arguments')
+        arguments = arguments_of(file, captured[0] if captured else None)
+        block = get_comments(file, command)
 
         commands.append(
             Command(
                 name=file.get_text(captures['name'][0]),
-                args=[file.get_text(child) for child in arguments.children],
-                comments=get_comments(file, command),
+                args=[file.get_text(argument) for argument in arguments],
+                comments=block.lines,
+                comments_line=block.line,
                 filepath=file.filepath,
                 line=command.start_point.row + 1,
             )

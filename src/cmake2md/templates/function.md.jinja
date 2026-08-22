@@ -15,7 +15,9 @@
 {%- set has_params = symbol.doc.args or symbol.doc.options
                      or symbol.doc.params or symbol.doc.multi_params %}
 ## {{ symbol.name }}
-
+{% if symbol.doc.deprecated %}
+**Deprecated.**
+{% endif %}
 {{ symbol.doc.description }}
 
 ```

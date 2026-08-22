@@ -22,11 +22,25 @@ First release as a standalone project, extracted from the
   uniformly to `symbols` and `commands`.
 - `--strict` turns unknown tags into errors; by default they are kept as
   literal text and reported as warnings.
+- `@deprecated` marks a whole symbol as deprecated; the built-in template
+  renders it, and the text after the tag stays in the description as the
+  reason.
+- A `CMAKE_FILE` argument may be a directory, which is searched for
+  `CMakeLists.txt` and `*.cmake`, or a glob pattern. Both are expanded by
+  cmake2md, so shells that do not expand globs — Windows' — behave the same.
+- `--list-templates` prints the packaged template names.
+- `--output -` writes to stdout.
 - `--check` verifies that generated documentation is up to date without
   writing, for use in CI.
 - `md_escape` filter for Markdown table cells.
 - `@@` escape for a literal `@`.
-- Errors report the file, line and symbol they came from.
+- Errors and warnings report the file, line and symbol they came from, and
+  the line is the one the offending tag is on rather than the line of the
+  definition below it.
+- A name defined by more than one of the sources read is reported, naming both
+  definitions.
+- Two `--template` options writing to one `--output` is a usage error instead
+  of silently discarding one of the two renders.
 - `Makefile` wrapping the development workflow (`make help` for the list).
 
 ### Changed
@@ -63,3 +77,9 @@ First release as a standalone project, extracted from the
   instead of aborting with a `UnicodeDecodeError` traceback.
 - A missing template says which directories were searched and which built-in
   templates exist, instead of printing just the template name.
+- A `function()` or `macro()` whose name is quoted (`function("foo")`) is no
+  longer dropped from the documentation without a word.
+- A command called without arguments (`enable_testing()`) is no longer dropped
+  together with its doc comment.
+- A comment inside an argument list is no longer taken for an argument.
+- `unquote` leaves an unpaired `"` alone instead of stripping it.

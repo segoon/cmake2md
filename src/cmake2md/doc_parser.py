@@ -40,6 +40,7 @@ TAG_SPECS: dict[str, TagSpec] = {
     **{kind.value: TagSpec(takes_name=True) for kind in ParamKind},
     'required': TagSpec(takes_name=False),
     'ingroup': TagSpec(takes_name=True),
+    'deprecated': TagSpec(takes_name=False),
 }
 
 
@@ -52,6 +53,13 @@ class Param:
 
 
 @dataclasses.dataclass
+class DocWarning:
+    message: str
+    #: File line the problem is on.
+    line: int
+
+
+@dataclasses.dataclass
 class DocComment:
     description: str
     group: str | None
@@ -59,8 +67,9 @@ class DocComment:
     options: list[Param]
     params: list[Param]
     multi_params: list[Param]
+    deprecated: bool
     #: Non-fatal problems found while parsing, reported by the CLI.
-    warnings: list[str]
+    warnings: list[DocWarning]
 
 
 _NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
@@ -73,16 +82,23 @@ _LITERAL_HINT = 'kept as literal text; use @@ to write a literal "@"'
 
 
 class Parser:
-    def __init__(self, tokens: Sequence[tag_lexer.Tag | str], strict: bool) -> None:
+    def __init__(
+        self,
+        tokens: Sequence[tag_lexer.Tag | str],
+        strict: bool,
+        first_line: int,
+    ) -> None:
         # Copied because _take_name pushes the unconsumed remainder back.
         self._tokens: list[tag_lexer.Tag | str] = list(tokens)
         self._pos = 0
         self._strict = strict
+        self._first_line = first_line
 
         self._doc_description = ''
         self._group: str | None = None
+        self._deprecated = False
         self._params: list[Param] = []
-        self._warnings: list[str] = []
+        self._warnings: list[DocWarning] = []
 
         self._kind: ParamKind | None = None
         self._name = ''
@@ -109,15 +125,18 @@ class Parser:
             options=of_kind(ParamKind.Option),
             params=of_kind(ParamKind.SingleArgParam),
             multi_params=of_kind(ParamKind.MultiArgParam),
+            deprecated=self._deprecated,
             warnings=self._warnings,
         )
+
+    def _file_line(self, tag: tag_lexer.Tag) -> int:
+        """The line `tag` is on in the file, not within the comment block."""
+        return self._first_line + tag.line - 1
 
     def _handle_tag(self, tag: tag_lexer.Tag) -> None:
         spec = TAG_SPECS.get(tag.name)
         if spec is None:
-            self._literal_tag(
-                tag, f'unknown tag @{tag.name} (line {tag.line}), {_LITERAL_HINT}'
-            )
+            self._literal_tag(tag, f'unknown tag @{tag.name}, {_LITERAL_HINT}')
             return
 
         name = ''
@@ -126,8 +145,7 @@ class Parser:
             if taken is None:
                 self._literal_tag(
                     tag,
-                    f'@{tag.name} (line {tag.line}) is not followed by a name, '
-                    f'{_LITERAL_HINT}',
+                    f'@{tag.name} is not followed by a name, {_LITERAL_HINT}',
                 )
                 return
             name = taken
@@ -142,18 +160,34 @@ class Parser:
             if self._kind is None:
                 raise ParseError(
                     '@required must follow one of '
-                    f'{", ".join("@" + k.value for k in ParamKind)} '
-                    f'(line {tag.line})'
+                    f'{", ".join("@" + k.value for k in ParamKind)}',
+                    line=self._file_line(tag),
                 )
             self._required = True
         elif tag.name == 'ingroup':
             self._group = name
+        elif tag.name == 'deprecated':
+            # Symbol-level: a parameter cannot be deprecated on its own.
+            self._deprecated = True
+
+        if not spec.takes_name:
+            self._eat_leading_space()
+
+    def _eat_leading_space(self) -> None:
+        """Drop the space that separated a valueless tag from the text.
+
+        The space before the tag stays in the description; without this the
+        one after it would remain as well, doubling it.
+        """
+        token = self._tokens[self._pos] if self._pos < len(self._tokens) else None
+        if isinstance(token, str) and token.startswith(' '):
+            self._tokens[self._pos] = token[1:]
 
     def _literal_tag(self, tag: tag_lexer.Tag, message: str) -> None:
         """Keep `tag` in the text as written, saying why (or fail if strict)."""
         if self._strict:
-            raise ParseError(message)
-        self._warnings.append(message)
+            raise ParseError(message, line=self._file_line(tag))
+        self._warnings.append(DocWarning(message, self._file_line(tag)))
         self._description += '@' + tag.name
 
     def _take_name(self, tag: tag_lexer.Tag) -> str | None:
@@ -166,7 +200,7 @@ class Parser:
         token = self._tokens[self._pos] if self._pos < len(self._tokens) else None
         m = _NAME_RE.match(token) if isinstance(token, str) else None
         if m is None:
-            raise ParseError(f'@{tag.name} requires a name (line {tag.line})')
+            raise ParseError(f'@{tag.name} requires a name', line=self._file_line(tag))
         name = m.group(1)
         if not _PLAUSIBLE_NAME_RE.search(name):
             return None
@@ -192,5 +226,11 @@ class Parser:
         self._required = False
 
 
-def parse(tokens: Sequence[tag_lexer.Tag | str], *, strict: bool = False) -> DocComment:
-    return Parser(tokens, strict=strict).parse()
+def parse(
+    tokens: Sequence[tag_lexer.Tag | str],
+    *,
+    strict: bool = False,
+    first_line: int = 1,
+) -> DocComment:
+    """Parse `tokens`; `first_line` is the file line the comment starts on."""
+    return Parser(tokens, strict=strict, first_line=first_line).parse()

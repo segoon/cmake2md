@@ -1,5 +1,7 @@
 # cmake2md
 
+[![CI](https://github.com/segoon/cmake2md/actions/workflows/ci.yml/badge.svg)](https://github.com/segoon/cmake2md/actions/workflows/ci.yml)
+
 Documentation generator for CMake. It parses CMake sources with
 [tree-sitter](https://tree-sitter.github.io/), extracts doxygen-like comments
 from `function()` definitions and command calls, and renders them through your
@@ -11,10 +13,14 @@ parsed model of the file and gets out of the way.
 ## Installation
 
 ```shell
-pip install cmake2md
+pip install cmake2md      # or: pipx install cmake2md
 ```
 
 Requires Python 3.10 or newer.
+
+While cmake2md is at 0.x, the tag vocabulary and the values handed to
+templates may still change; pin `cmake2md~=0.1` if you generate documentation
+in CI.
 
 ## Quick start
 
@@ -60,7 +66,8 @@ example_add_library(
 * **SOURCES <value>...** the source files to compile
 ````
 
-A complete, runnable example lives in [`examples/`](examples/).
+A complete, runnable example lives in
+[`examples/`](https://github.com/segoon/cmake2md/tree/master/examples).
 
 ## Comment syntax
 
@@ -68,6 +75,9 @@ A doc comment is the run of `#` comment lines immediately above a `function()`,
 a `macro()` or a command call. A blank line ends the run. The block is dedented
 as a whole, so the space in the conventional `# ` disappears while indentation
 *inside* the comment — nested lists, code blocks — is preserved.
+
+Only `#` line comments are doc comments. A bracket comment (`#[[ ... ]]`) is
+ignored, and a symbol documented that way reads as undocumented.
 
 | Tag | Applies to | Meaning |
 |-----|------------|---------|
@@ -77,6 +87,7 @@ as a whole, so the space in the conventional `# ` disappears while indentation
 | `@multiparam NAME` | function, macro | Keyword taking one or more values. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
+| `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
 
 Text that is not part of a tag becomes the description: text before the first
 parameter tag describes the symbol, text after a parameter tag describes that
@@ -95,7 +106,8 @@ something that looks like a name (`@ingroup, so …` is prose, not a group named
 ### Adding a tag
 
 The vocabulary is deliberately small and lives in one place:
-`TAG_SPECS` in [`src/cmake2md/doc_parser.py`](src/cmake2md/doc_parser.py).
+`TAG_SPECS` in
+[`src/cmake2md/doc_parser.py`](https://github.com/segoon/cmake2md/blob/master/src/cmake2md/doc_parser.py).
 Register the tag there and handle it in `Parser._handle_tag`.
 
 ## Writing templates
@@ -115,10 +127,11 @@ Each entry is a dict with:
 | Key | Description |
 |-----|-------------|
 | `name` | Function, macro or command name. |
-| `doc` | Parsed comment: `.description`, `.group`, `.args`, `.options`, `.params`, `.multi_params`. |
+| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.warnings`. |
 | `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
+| `comments_line` | Line the comment block starts on, or `0` when there is none. |
 | `type_` | Symbols only: `'function'` or `'macro'`. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
@@ -160,11 +173,17 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--strict] [--check] CMAKE_FILE.
 | Flag | Effect |
 |------|--------|
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
-| `-o`, `--output` | Where to write the matching `--template`. Repeatable, paired in order. |
+| `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
 | `--strict` | Treat doubtful `@tags` as errors. |
 | `--check` | Write nothing; exit non-zero if any output is missing or stale. |
+| `--list-templates` | List the built-in template names and exit. |
 | `--version` | Print the version and exit. |
+
+Each `CMAKE_FILE` is a file, a directory to search for `CMakeLists.txt` and
+`*.cmake` (dot-directories are skipped), or a glob pattern. cmake2md expands
+directories and patterns itself, so it behaves the same in shells that do not,
+such as those on Windows.
 
 `--check` is meant for CI, to verify that generated documentation was
 regenerated after a change to the CMake sources.
@@ -182,6 +201,8 @@ make check      # lint, type check and test, as CI does
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0 — see
+[LICENSE](https://github.com/segoon/cmake2md/blob/master/LICENSE) and
+[NOTICE](https://github.com/segoon/cmake2md/blob/master/NOTICE).
 cmake2md started life as a set of scripts inside the
 [userver](https://github.com/userver-framework/userver) framework.

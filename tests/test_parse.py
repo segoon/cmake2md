@@ -89,6 +89,59 @@ def test_extract_commands_handles_set_with_cache(cmake_file):
     assert sets[0].args[4] == '"Where example lives"'
 
 
+def test_quoted_symbol_name_is_extracted_without_its_quotes(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Doc.\nfunction("quoted_fn")\nendfunction()\n', encoding='utf-8'
+    )
+    symbol = parse.extract_symbols(parse.parse_file(source))[0]
+    assert symbol.name == 'quoted_fn'
+    assert [c.strip() for c in symbol.comments] == ['Doc.']
+
+
+def test_command_without_arguments_is_still_extracted(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# Doc.\nenable_testing()\n', encoding='utf-8')
+    command = parse.extract_commands(parse.parse_file(source))[0]
+    assert command.name == 'enable_testing'
+    assert command.args == []
+    assert [c.strip() for c in command.comments] == ['Doc.']
+
+
+def test_comment_inside_an_argument_list_is_not_an_argument(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('option(FOO # why\n    ON)\n', encoding='utf-8')
+    command = parse.extract_commands(parse.parse_file(source))[0]
+    assert command.args == ['FOO', 'ON']
+
+
+def test_comment_block_start_line_is_recorded(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        'set(A 1)\n\n# first\n# second\nfunction(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    symbol = parse.extract_symbols(parse.parse_file(source))[0]
+    assert symbol.comments_line == 3
+    assert symbol.line == 5
+
+
+def test_symbol_without_a_comment_has_no_comment_line(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('function(f)\nendfunction()\n', encoding='utf-8')
+    assert parse.extract_symbols(parse.parse_file(source))[0].comments_line == 0
+
+
+def test_location_points_at_a_line_inside_the_comment(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# doc\nfunction(f)\nendfunction()\n', encoding='utf-8')
+    symbol = parse.extract_symbols(parse.parse_file(source))[0]
+    assert symbol.location.endswith(':2: function f')
+    assert symbol.location_at(1).endswith(':1: function f')
+    # An unknown line falls back to the definition itself.
+    assert symbol.location_at(0) == symbol.location
+
+
 def test_missing_file_raises_a_friendly_error(tmp_path):
     with pytest.raises(Cmake2mdError, match='cannot read'):
         parse.parse_file(tmp_path / 'nope.txt')

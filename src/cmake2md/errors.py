@@ -8,16 +8,19 @@ class Cmake2mdError(Exception):
     offending file/symbol instead of dumping a traceback.
     """
 
-    def __init__(self, message: str, location: str = '') -> None:
+    def __init__(self, message: str, location: str = '', line: int = 0) -> None:
         self.message = message
         self.location = location
+        #: File line the problem is on; 0 when it is not known any more
+        #: precisely than the symbol the error was raised for.
+        self.line = line
         super().__init__(f'{location}: {message}' if location else message)
 
     def at(self, location: str) -> 'Cmake2mdError':
         """Return this error with `location` attached, if it has none yet."""
         if self.location:
             return self
-        return type(self)(self.message, location)
+        return type(self)(self.message, location, self.line)
 
 
 class ParseError(Cmake2mdError):

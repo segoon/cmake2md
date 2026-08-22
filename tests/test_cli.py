@@ -153,6 +153,94 @@ def test_error_message_points_at_the_symbol(template, tmp_path, capsys):
     assert '@param requires a name' in err
 
 
+def test_error_points_at_the_line_the_tag_is_on(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    # The comment block starts on line 3 and the bad tag is on line 5, two
+    # lines above the function() the old message used to point at.
+    source.write_text(
+        'set(A 1)\n\n# Doc line one.\n# Doc line two.\n# Trouble: @param\n'
+        'function(broken)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 1
+    err = capsys.readouterr().err
+    assert f'{source}:5: function broken: @param requires a name' in err
+
+
+def test_warning_points_at_the_line_the_tag_is_on(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Doc line one.\n# Not tagged with @ingroup, so it is ungrouped.\n'
+        'function(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert f'{source}:2: function f: warning:' in capsys.readouterr().err
+
+
+def test_duplicate_symbol_is_reported(template, tmp_path, capsys):
+    first = tmp_path / 'a.cmake'
+    second = tmp_path / 'b.cmake'
+    first.write_text('# Doc A\nfunction(dup)\nendfunction()\n', encoding='utf-8')
+    second.write_text('# Doc B\nfunction(dup)\nendfunction()\n', encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'out.md', first, second) == 0
+    err = capsys.readouterr().err
+    assert 'dup is already defined' in err
+    assert str(first) in err
+
+
+def test_two_templates_may_not_share_one_output(cmake_file, template, tmp_path):
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, '-t', template, '-o', out, cmake_file) == 1
+
+
+def test_list_templates_needs_no_source(capsys):
+    assert run('--list-templates') == 0
+    assert 'function.md.jinja' in capsys.readouterr().out
+
+
+def test_output_dash_writes_to_stdout(cmake_file, template, capsys):
+    assert run('-t', template, '-o', '-', cmake_file) == 0
+    assert '## example_add_library' in capsys.readouterr().out
+
+
+def test_output_dash_is_rejected_with_check(cmake_file, template, capsys):
+    assert run('--check', '-t', template, '-o', '-', cmake_file) == 1
+    assert 'writes nothing to check' in capsys.readouterr().err
+
+
+def test_directory_is_searched_for_cmake_sources(template, tmp_path):
+    (tmp_path / 'sub').mkdir()
+    (tmp_path / 'CMakeLists.txt').write_text(
+        '# Doc\nfunction(top)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'sub' / 'helpers.cmake').write_text(
+        '# Doc\nfunction(nested)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'sub' / 'notes.txt').write_text('function(ignored)\n', encoding='utf-8')
+
+    out = tmp_path / 'out' / 'ref.md'
+    assert run('-t', template, '-o', out, tmp_path) == 0
+    text = out.read_text(encoding='utf-8')
+    assert '## top' in text
+    assert '## nested' in text
+    assert 'ignored' not in text
+
+
+def test_glob_pattern_is_expanded(template, tmp_path):
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(from_glob)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, tmp_path / '*.cmake') == 0
+    assert '## from_glob' in out.read_text(encoding='utf-8')
+
+
+def test_no_source_given_is_a_usage_error(template, tmp_path, capsys):
+    assert run('-t', template, '-o', tmp_path / 'out.md') == 1
+    assert 'no CMAKE_FILE given' in capsys.readouterr().err
+
+
 def test_missing_template_is_a_usage_error(cmake_file, tmp_path, capsys):
     assert run('-o', tmp_path / 'out.md', cmake_file) == 1
     assert 'no --template given' in capsys.readouterr().err
@@ -168,9 +256,9 @@ def test_legacy_colon_syntax_gets_a_helpful_message(cmake_file, template, capsys
     assert 'no longer supported' in capsys.readouterr().err
 
 
-def test_unreadable_source_is_reported(template, tmp_path, capsys):
+def test_missing_source_is_reported(template, tmp_path, capsys):
     assert run('-t', template, '-o', tmp_path / 'out.md', tmp_path / 'gone.txt') == 1
-    assert 'cannot read' in capsys.readouterr().err
+    assert 'no CMake sources found' in capsys.readouterr().err
 
 
 def test_non_utf8_source_is_reported_without_a_traceback(template, tmp_path, capsys):
