@@ -146,9 +146,28 @@ def test_sections_carry_the_line_they_are_on():
     assert doc.of_kind('note')[0].line == 41
 
 
+def test_defgroup_takes_a_name_and_a_title():
+    doc = parse(
+        ' @defgroup build Build targets',
+        '',
+        ' What gets built, and what is left out.',
+    )
+    section = doc.of_kind('defgroup')[0]
+    assert section.name == 'build'
+    assert section.text == 'Build targets'
+    assert doc.description == 'What gets built, and what is left out.'
+
+
+def test_defgroup_without_a_title_keeps_an_empty_one():
+    assert doc_parser.parse(tag_lexer.tokenize([' @defgroup build'])).of_kind(
+        'defgroup'
+    )[0] == doc_parser.Section(kind='defgroup', text='', name='build', line=1)
+
+
 def test_ingroup():
     doc = parse(' @ingroup compilation')
     assert doc.group == 'compilation'
+    assert doc.group_line == 1
 
 
 def test_ingroup_with_surrounding_description():

@@ -180,6 +180,7 @@ def enrich(
     item: parse.Documented,
     function_template: jinja2.Template | None,
     strict: bool,
+    groups: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Attach the parsed doc comment and a rendered form to `item`."""
     try:
@@ -191,7 +192,7 @@ def enrich(
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    report(item, doc.warnings + checks.check(item, doc), strict)
+    report(item, doc.warnings + checks.check(item, doc, groups), strict)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -204,6 +205,29 @@ def enrich(
         # nothing for the function template to do with it.
         res['pretty'] = doc.description
     return res
+
+
+def collect_groups(blocks: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build the group list out of the @defgroup tags in `blocks`.
+
+    The order is the order they were written in, which is the only ordering
+    the author gave and the one a table of contents wants.
+    """
+    groups = []
+    for block in blocks:
+        doc = block['doc']
+        for section in doc.of_kind(doc_parser.DEFGROUP):
+            groups.append(
+                {
+                    'name': section.name,
+                    # A group with no title reads by its own name.
+                    'title': section.text or section.name,
+                    'description': doc.description,
+                    'doc': doc,
+                    'location': block['location'],
+                }
+            )
+    return groups
 
 
 def warn_duplicate_symbols(symbols: Sequence[parse.Symbol]) -> None:
@@ -270,17 +294,25 @@ def run(args: argparse.Namespace) -> int:
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
     variables: list[parse.Variable] = []
+    blocks: list[parse.Block] = []
     for path in collect_sources(args.path):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
         variables += parse.extract_variables(file)
+        blocks += parse.extract_blocks(file)
     warn_duplicate_symbols(symbols)
 
+    # Groups first: what they define is what an @ingroup elsewhere is checked
+    # against.
+    groups = collect_groups([enrich(b, None, args.strict) for b in blocks])
+    known = frozenset(group['name'] for group in groups)
+
     context = {
-        'symbols': [enrich(s, function_template, args.strict) for s in symbols],
-        'commands': [enrich(c, None, args.strict) for c in commands],
-        'variables': [enrich(v, None, args.strict) for v in variables],
+        'symbols': [enrich(s, function_template, args.strict, known) for s in symbols],
+        'commands': [enrich(c, None, args.strict, known) for c in commands],
+        'variables': [enrich(v, None, args.strict, known) for v in variables],
+        'groups': groups,
     }
 
     ok = True

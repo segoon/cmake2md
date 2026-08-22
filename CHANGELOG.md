@@ -4,7 +4,14 @@
 
 ### Added
 
-- Seven tags: `@brief`, `@example`, `@note`, `@warning`, `@since`, `@todo`
+- `@defgroup NAME <title>`, written in a comment block of its own, gives a
+  group a title, a description and a position in the document. Templates get
+  them as `groups`, so `examples/reference.md.jinja` no longer names a single
+  group of its own. An `@ingroup` naming a group that no `@defgroup` defines
+  is reported, once any group is defined at all.
+- Comment blocks that document nothing are extracted, which is where a group
+  is defined and where anything said about the file as a whole will go.
+- Eight tags: `@brief`, `@example`, `@note`, `@warning`, `@since`, `@todo`
   and `@see`. A prose tag holds one paragraph and ends at a blank line, as
   Doxygen's does; `@example` holds a block, so the blank lines inside a sample
   survive. They arrive as `doc.brief` and `doc.sections`, which

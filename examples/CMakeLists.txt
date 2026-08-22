@@ -8,6 +8,21 @@
 cmake_minimum_required(VERSION 3.20)
 project(example_project)
 
+# A comment block of its own defines a group, which is what keeps the group
+# names out of the template.
+
+# @defgroup build Build targets
+#
+# What gets built, and what is left out.
+
+# @defgroup compilation Compilation modes
+#
+# How the sources are compiled.
+
+# @defgroup paths Paths
+#
+# Where the build looks for things it does not carry itself.
+
 # @ingroup build
 option(EXAMPLE_BUILD_TESTS "Build the test suite" ON)
 

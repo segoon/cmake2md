@@ -88,6 +88,7 @@ ignored, and a symbol documented that way reads as undocumented.
 | `@return NAME` | function, macro | Variable set in the caller's scope: CMake's way of returning a value. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
+| `@defgroup NAME <title>` | a comment block of its own | Defines a group: its title is the rest of the line, its description the paragraphs below. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
 | `@internal` | function, macro, command | Marks the symbol as not part of the public interface. The `public` filter drops it. |
 | `@brief` | anything | A one-paragraph summary, distinct from the description. |
@@ -166,13 +167,15 @@ Register the tag there and handle it in `Parser._handle_tag`.
 
 ## Writing templates
 
-Templates receive three lists:
+Templates receive four lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
 - `variables` — every cache entry a user can set: `option()` and
   `set(... CACHE ...)`, parsed
 - `commands` — every command call (`option()`, `set()`, …), including calls
   nested in a `function()` body or an `if()` block
+- `groups` — every `@defgroup`, in the order they were defined, each with a
+  `name`, a `title` and a `description`
 
 All three are unfiltered on purpose: the `documented` filter drops the
 entries that carry no comment, and `only_command` selects the commands you
@@ -202,6 +205,34 @@ Each parameter in `doc.args` / `doc.options` / `doc.params` /
 `doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
 `.kind` and `.line`. Each entry of `doc.sections` has `.kind` — the tag that
 opened it, without the `@` — `.text` and `.line`.
+
+### Groups
+
+`@ingroup` puts a symbol in a group; `@defgroup`, in a comment block that
+documents nothing else, gives that group a title and a description:
+
+```cmake
+# @defgroup build Build targets
+#
+# What gets built, and what is left out.
+```
+
+They arrive as `groups`, in the order they were defined, so a template writes
+the whole document without naming a single group:
+
+```jinja
+{% for group in groups %}
+## {{ group.title }}
+
+{{ group.description }}
+
+{{ render(symbols | documented | only_group(group.name)) }}
+{% endfor %}
+```
+
+Once any group is defined, an `@ingroup` naming one that is not is reported —
+until then `@ingroup` is a bare label, which is how it worked before, and
+nothing is checked.
 
 ### Build options
 

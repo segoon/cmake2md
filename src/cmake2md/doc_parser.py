@@ -58,6 +58,8 @@ PROSE_TAGS = ('brief', 'note', 'warning', 'since', 'todo', 'see')
 BLOCK_TAGS = ('example',)
 #: The tag whose text is the summary rather than a section of its own.
 BRIEF = 'brief'
+#: The tag that defines a group; its name is the group's, its text the title.
+DEFGROUP = 'defgroup'
 
 #: The recognised tag vocabulary.  Extension point: add an entry here and a
 #: matching branch in ``Parser._handle_tag`` — a tag that only carries text
@@ -68,6 +70,9 @@ TAG_SPECS: dict[str, TagSpec] = {
     **{name: TagSpec(takes_name=False, text=TagText.Block) for name in BLOCK_TAGS},
     'required': TagSpec(takes_name=False),
     'ingroup': TagSpec(takes_name=True),
+    # The title runs to the end of the line; the paragraphs below it are the
+    # group's description, which is the enclosing comment block's own.
+    DEFGROUP: TagSpec(takes_name=True, text=TagText.Paragraph),
     'deprecated': TagSpec(takes_name=False),
     'internal': TagSpec(takes_name=False),
 }
@@ -90,6 +95,8 @@ class Section:
     #: The tag that opened it, without the '@': 'note', 'example', …
     kind: str
     text: str
+    #: The name the tag took, for the tags that take one; '' for the rest.
+    name: str = ''
     #: File line the tag is on.
     line: int = 0
 
@@ -107,6 +114,8 @@ class DocComment:
     #: The @brief summary, or '' when the author wrote none.
     brief: str
     group: str | None
+    #: File line the @ingroup tag is on; 0 when there is none.
+    group_line: int
     args: list[Param]
     options: list[Param]
     params: list[Param]
@@ -164,6 +173,7 @@ class Parser:
         self._doc_description = ''
         self._brief = ''
         self._group: str | None = None
+        self._group_line = 0
         self._deprecated = False
         self._internal = False
         self._params: list[Param] = []
@@ -193,6 +203,7 @@ class Parser:
             description=self._doc_description,
             brief=self._brief,
             group=self._group,
+            group_line=self._group_line,
             args=of_kind(ParamKind.Positional),
             options=of_kind(ParamKind.Option),
             params=of_kind(ParamKind.SingleArgParam),
@@ -249,6 +260,7 @@ class Parser:
             self._open.required = True
         elif tag.name == 'ingroup':
             self._group = name
+            self._group_line = self._file_line(tag)
         elif tag.name == 'deprecated':
             # Symbol-level: a parameter cannot be deprecated on its own.
             self._deprecated = True
@@ -273,7 +285,7 @@ class Parser:
                 line=line,
             )
         else:
-            self._open = Section(kind=tag.name, text='', line=line)
+            self._open = Section(kind=tag.name, text='', name=name, line=line)
         self._ends_at_blank_line = spec.text is TagText.Paragraph
 
     def _eat_leading_space(self) -> None:

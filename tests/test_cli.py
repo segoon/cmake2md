@@ -242,6 +242,67 @@ def test_builtin_template_renders_the_new_sections(tmp_path):
     assert '_helper' not in text
 
 
+GROUPED_SOURCE = """\
+# @defgroup build Build targets
+#
+# What gets built.
+
+# @defgroup paths Paths
+#
+# Where to look.
+
+# @ingroup build
+option(A "d" ON)
+"""
+
+
+def test_groups_carry_their_title_description_and_order(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(GROUPED_SOURCE, encoding='utf-8')
+    group_template = tmp_path / 'groups.md.jinja'
+    group_template.write_text(
+        '{% for g in groups %}{{ g.name }}|{{ g.title }}|{{ g.description }}\n'
+        '{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', group_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').splitlines() == [
+        'build|Build targets|What gets built.',
+        'paths|Paths|Where to look.',
+    ]
+
+
+def test_ingroup_naming_an_undefined_group_warns(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @ingroup nosuch\noption(B "d" ON)\n', encoding='utf-8'
+    )
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert '@ingroup nosuch names a group that no @defgroup defines' in (
+        capsys.readouterr().err
+    )
+
+
+def test_ingroup_is_not_checked_when_no_group_is_defined(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @ingroup build\noption(A "d" ON)\n', encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'names a group' not in capsys.readouterr().err
+
+
+def test_defgroup_on_a_symbol_is_reported(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @defgroup build Build targets\nfunction(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'defines nothing; a group is defined in a comment block' in (
+        capsys.readouterr().err
+    )
+
+
 def test_variables_reach_templates_already_parsed(cmake_file, tmp_path):
     var_template = tmp_path / 'vars.md.jinja'
     var_template.write_text(

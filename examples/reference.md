@@ -109,6 +109,8 @@ example_fail(
 
 ## Build targets
 
+What gets built, and what is left out.
+
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_BUILD_TESTS` | Build the test suite | `ON` |
@@ -116,6 +118,8 @@ example_fail(
 
 
 ## Compilation modes
+
+How the sources are compiled.
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -125,6 +129,8 @@ example_fail(
 
 ## Paths
 
-| Variable | Description | Default |
+Where the build looks for things it does not carry itself.
+
+| Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_TOOLCHAIN_DIR` | Toolchain location | `/usr/local/toolchain` |

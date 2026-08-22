@@ -46,7 +46,7 @@ hands templates raw argument lists, which is where every comparable tool
       accident of it having no comment
 - [ ] stable anchors and auto-linking of symbol names, so `@see` becomes a
       link rather than a name
-- [ ] `@defgroup NAME <title>` with a description and an ordering, so
+- [x] `@defgroup NAME <title>` with a description and an ordering, so
       `examples/reference.md.jinja` stops hardcoding the group names
 - [ ] parameter types and default values
 - [ ] file-level documentation (`@file`)

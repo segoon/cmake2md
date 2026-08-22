@@ -92,7 +92,8 @@ class Documented(abc.ABC):
         Diagnostics about a tag know the line the tag is on, which is inside
         the comment block and so above `self.line`.
         """
-        return f'{self.filepath}:{line or self.line}: {self.kind} {self.name}'
+        # rstrip: a comment block has no name to print after its kind.
+        return f'{self.filepath}:{line or self.line}: {self.kind} {self.name}'.rstrip()
 
 
 @dataclasses.dataclass
@@ -142,40 +143,91 @@ class Variable(Documented):
 
 
 @dataclasses.dataclass
+class Block(Documented):
+    """A comment block that documents nothing but itself.
+
+    It is where a group is defined, and where anything said about the file as
+    a whole belongs.
+    """
+
+    @property
+    def kind(self) -> str:
+        return 'comment block'
+
+
+@dataclasses.dataclass
 class CommentBlock:
     lines: list[str]
     #: File line the block starts on; 0 when there is no comment.
     line: int
 
 
+def newlines_between(file: File, first: Node, second: Node) -> int:
+    return file.content.count(b'\n', first.end_byte, second.start_byte)
+
+
+def comment_block(file: File, comments: Sequence[Node]) -> CommentBlock:
+    """Build a block out of consecutive comment nodes.
+
+    The run is dedented as one block rather than line by line, which keeps
+    indentation *within* the comment — nested lists, code blocks — intact.
+    """
+    if not comments:
+        return CommentBlock(lines=[], line=0)
+    text = '\n'.join(file.get_text(c).removeprefix('#') for c in comments)
+    return CommentBlock(
+        lines=textwrap.dedent(text).split('\n'),
+        line=comments[0].start_point.row + 1,
+    )
+
+
 def get_comments(file: File, node: Node) -> CommentBlock:
     """Collect the run of comment lines immediately above `node`.
 
     A blank line ends the run, so an unrelated comment further up the file is
-    not absorbed into this symbol's documentation.  The run is dedented as one
-    block rather than line by line, which keeps indentation *within* the
-    comment — nested lists, code blocks — intact.
+    not absorbed into this symbol's documentation.
     """
     comments = []
 
     current = node
     prev = current.prev_sibling
     while prev is not None and prev.type == 'line_comment':
-        gap = file.content[prev.end_byte : current.start_byte]
-        if gap.count(b'\n') > 1:
+        if newlines_between(file, prev, current) > 1:
             break
-        comments.append(file.get_text(prev).removeprefix('#'))
+        comments.append(prev)
         current = prev
         prev = current.prev_sibling
 
-    if not comments:
-        return CommentBlock(lines=[], line=0)
     comments.reverse()
-    # `current` walked up to the topmost comment of the run.
-    return CommentBlock(
-        lines=textwrap.dedent('\n'.join(comments)).split('\n'),
-        line=current.start_point.row + 1,
-    )
+    return comment_block(file, comments)
+
+
+def standalone_blocks(file: File, node: Node) -> Iterator[CommentBlock]:
+    """The comment blocks below `node` that document nothing.
+
+    A block that sits directly above a definition or a call belongs to it and
+    `get_comments` has it already; one separated by a blank line, or with
+    nothing after it at all, stands on its own and can only be talking about
+    the file or about a group.
+    """
+    run: list[Node] = []
+    for child in node.children:
+        if child.type == 'line_comment':
+            if run and newlines_between(file, run[-1], child) > 1:
+                yield comment_block(file, run)
+                run = []
+            run.append(child)
+            continue
+
+        if run:
+            attached = newlines_between(file, run[-1], child) <= 1
+            if not attached:
+                yield comment_block(file, run)
+            run = []
+        yield from standalone_blocks(file, child)
+
+    if run:
+        yield comment_block(file, run)
 
 
 def argument_name(file: File, argument: Node) -> str:
@@ -526,6 +578,21 @@ def extract_variables(file: File) -> list[Variable]:
             )
         )
     return variables
+
+
+def extract_blocks(file: File) -> list[Block]:
+    """Extract the comment blocks that document nothing but themselves."""
+    return [
+        Block(
+            name='',
+            comments=block.lines,
+            comments_line=block.line,
+            filepath=file.filepath,
+            line=block.line,
+        )
+        for block in standalone_blocks(file, file.tree.root_node)
+        if any(line.strip() for line in block.lines)
+    ]
 
 
 def parse_file(path: str | pathlib.Path) -> File:

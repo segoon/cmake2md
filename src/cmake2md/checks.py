@@ -10,8 +10,10 @@ parsed, which is as close to rustdoc's doc tests as a build language gets.
 """
 
 import re
+from collections.abc import Collection
 
 from . import parse
+from .doc_parser import DEFGROUP
 from .doc_parser import DocComment
 from .doc_parser import DocWarning
 from .doc_parser import ParamKind
@@ -36,13 +38,18 @@ def does_not(kind: ParamKind) -> str:
     return 'does not set' if kind == ParamKind.OutVar else 'does not accept'
 
 
-def check(item: parse.Documented, doc: DocComment) -> list[DocWarning]:
+def check(
+    item: parse.Documented,
+    doc: DocComment,
+    groups: Collection[str] = (),
+) -> list[DocWarning]:
     """Report where `doc` disagrees with the code it documents.
 
     An item whose parameters are not documented at all is left alone: it is
     not drifting, it is simply undocumented, which is a separate question.
     """
     warnings = _broken_examples(doc)
+    warnings += _group_problems(item, doc, groups)
     if isinstance(item, parse.Symbol) and doc.all_params():
         warnings += _duplicate_params(doc)
         warnings += _params_the_code_denies(item, doc)
@@ -60,6 +67,37 @@ def cmake_snippets(text: str) -> list[str]:
     if not fences:
         return [text]
     return [body for language, body in fences if language in _CMAKE_FENCES]
+
+
+def _group_problems(
+    item: parse.Documented, doc: DocComment, groups: Collection[str]
+) -> list[DocWarning]:
+    """Report an @ingroup naming no group, and an @defgroup that defines none.
+
+    The first is only checked once some group exists: a project that never
+    writes @defgroup is using @ingroup as a bare label, which is how cmake2md
+    worked before groups had titles, and is nothing to complain about.
+    """
+    warnings = []
+    if groups and doc.group is not None and doc.group not in groups:
+        warnings.append(
+            DocWarning(
+                f'@ingroup {doc.group} names a group that no @defgroup defines',
+                doc.group_line,
+            )
+        )
+
+    if not isinstance(item, parse.Block):
+        for section in doc.of_kind(DEFGROUP):
+            warnings.append(
+                DocWarning(
+                    f'@defgroup {section.name} in the documentation of '
+                    f'{item.name} defines nothing; a group is defined in a '
+                    'comment block of its own',
+                    section.line,
+                )
+            )
+    return warnings
 
 
 def _broken_examples(doc: DocComment) -> list[DocWarning]:

@@ -37,15 +37,10 @@
 ## General
 
 {{ table(variables | only_group(None), 'Option') }}
+{% for group in groups %}
+## {{ group.title }}
 
-## Build targets
+{{ group.description }}
 
-{{ table(variables | only_group('build'), 'Option') }}
-
-## Compilation modes
-
-{{ table(variables | only_group('compilation'), 'Option') }}
-
-## Paths
-
-{{ table(variables | only_group('paths'), 'Variable') }}
+{{ table(variables | only_group(group.name), 'Option') }}
+{% endfor %}

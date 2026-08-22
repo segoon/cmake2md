@@ -142,6 +142,42 @@ def test_location_points_at_a_line_inside_the_comment(tmp_path):
     assert symbol.location_at(0) == symbol.location
 
 
+def test_extract_blocks_finds_only_unattached_comments(parsed):
+    blocks = parse.extract_blocks(
+        parsed(
+            '# standalone, separated by a blank line\n'
+            '\n'
+            '# attached to the option below\n'
+            'option(FOO "d" ON)\n'
+            '\n'
+            '# attached to the function below\n'
+            'function(f)\n'
+            'endfunction()\n'
+            '\n'
+            '# standalone at the end of the file\n'
+        )
+    )
+    assert [b.comments[0].strip() for b in blocks] == [
+        'standalone, separated by a blank line',
+        'standalone at the end of the file',
+    ]
+
+
+def test_a_standalone_block_carries_its_line(parsed):
+    block = parse.extract_blocks(parsed('set(A 1)\n\n# a note\n# on two lines\n'))[0]
+    # Dedented as one block, like any other comment.
+    assert block.comments == ['a note', 'on two lines']
+    assert block.line == 3
+    assert block.location.endswith(':3: comment block')
+
+
+def test_blocks_inside_a_body_are_found_too(parsed):
+    blocks = parse.extract_blocks(
+        parsed('function(f)\n    set(A 1)\n\n    # standalone inside\nendfunction()\n')
+    )
+    assert [b.comments[0].strip() for b in blocks] == ['standalone inside']
+
+
 def test_missing_file_raises_a_friendly_error(tmp_path):
     with pytest.raises(Cmake2mdError, match='cannot read'):
         parse.parse_file(tmp_path / 'nope.txt')
