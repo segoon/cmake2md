@@ -199,6 +199,12 @@ make check      # lint, type check and test, as CI does
 (regenerate `examples/reference.md`), `dist`, `clean` and, for maintainers,
 `release-check`, `publish-test` and `publish`.
 
+Every pull request runs `make check example-check` on Linux, the test suite on
+Linux, macOS and Windows for each supported Python version, and a packaging
+smoke test. The `ci-ok` job summarises all of them; it is the single check to
+require in the branch protection rule, so that changing the test matrix never
+means editing that rule.
+
 ## License
 
 Apache License 2.0 — see
