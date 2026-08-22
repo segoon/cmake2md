@@ -1,0 +1,23 @@
+# Hooks a project gets by listing this repository in .pre-commit-config.yaml.
+#
+# The check hook is the one to use in most projects: it fails when the
+# generated documentation is out of date and shows what differs, leaving the
+# regeneration to the author. The write hook regenerates instead, so the
+# commit picks the new documentation up.
+- id: cmake2md-check
+  name: cmake2md (check documentation is up to date)
+  description: Fail when generated CMake documentation is out of date.
+  entry: cmake2md --check
+  language: python
+  files: (CMakeLists\.txt|\.cmake)$
+  pass_filenames: false
+  require_serial: true
+
+- id: cmake2md
+  name: cmake2md (regenerate documentation)
+  description: Regenerate documentation from CMake sources.
+  entry: cmake2md
+  language: python
+  files: (CMakeLists\.txt|\.cmake)$
+  pass_filenames: false
+  require_serial: true

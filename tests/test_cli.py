@@ -659,3 +659,104 @@ def test_ignore_file_adds_exclusions(template, tmp_path, monkeypatch):
     text = out.read_text(encoding='utf-8')
     assert '## kept' in text
     assert 'skipped' not in text
+
+
+INJECTABLE = """\
+# My project
+
+Prose the author wrote.
+
+<!-- BEGIN_CMAKE2MD -->
+what was generated last time
+<!-- END_CMAKE2MD -->
+
+Prose after it.
+"""
+
+
+def test_inject_replaces_only_what_is_between_the_markers(
+    cmake_file, template, tmp_path
+):
+    out = tmp_path / 'README.md'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert text.startswith('# My project\n\nProse the author wrote.\n')
+    assert text.endswith('Prose after it.\n')
+    assert '## example_add_library' in text
+    assert 'what was generated last time' not in text
+
+
+def test_inject_is_idempotent(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.md'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    once = out.read_text(encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    assert out.read_text(encoding='utf-8') == once
+    # And --check agrees that there is nothing to do.
+    assert run('--check', '--inject', '-t', template, '-o', out, cmake_file) == 0
+
+
+def test_inject_without_markers_says_what_is_missing(
+    cmake_file, template, tmp_path, capsys
+):
+    out = tmp_path / 'README.md'
+    out.write_text('# My project\n', encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 1
+    assert 'no place to inject into' in capsys.readouterr().err
+
+
+def test_inject_needs_the_file_to_exist(cmake_file, template, tmp_path, capsys):
+    assert run('--inject', '-t', template, '-o', tmp_path / 'nope.md', cmake_file) == 1
+    assert '--inject needs' in capsys.readouterr().err
+
+
+def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_path):
+    out = tmp_path / 'ref.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## Contents' in text
+    assert '[example_add_library](#example_add_library)' in text
+    assert '## Build options' in text
+    assert '| `EXAMPLE_BUILD_TESTS` |' in text
+    # Undocumented symbols stay out, as in the other built-in template.
+    assert 'undocumented_function' not in text
+
+
+def test_reference_template_lays_itself_out_by_group(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @defgroup targets Targets\n'
+        '#\n'
+        '# Adding things to build.\n'
+        '\n'
+        '# Adds a library.\n'
+        '#\n'
+        '# @ingroup targets\n'
+        'function(add_lib)\n'
+        'endfunction()\n'
+        '\n'
+        '# In no group at all.\n'
+        'function(loose_one)\n'
+        'endfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'ref.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, source) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## Targets' in text
+    assert 'Adding things to build.' in text
+    # What no group claims still gets a home.
+    assert '## Functions and macros' in text
+    assert '## loose_one' in text
+
+
+def test_list_templates_names_both_builtins(capsys):
+    assert run('--list-templates') == 0
+    out = capsys.readouterr().out
+    assert 'function.md.jinja' in out
+    assert 'reference.md.jinja' in out

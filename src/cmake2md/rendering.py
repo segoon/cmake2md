@@ -10,6 +10,10 @@ import jinja2
 
 from .errors import UsageError
 
+#: Markers that delimit the generated part of a file written with --inject.
+INJECT_BEGIN = '<!-- BEGIN_CMAKE2MD -->'
+INJECT_END = '<!-- END_CMAKE2MD -->'
+
 #: Name of the template used to render each function into ``symbol.pretty``.
 #: Shadowing this file from a `--template-dir` overrides the built-in one.
 FUNCTION_TEMPLATE_NAME = 'function.md.jinja'
@@ -184,3 +188,26 @@ def render_document(template: jinja2.Template, context: dict[str, Any]) -> str:
     # Whatever whitespace the template's control blocks leave at either end,
     # a document ends with exactly one newline and no leading blank lines.
     return collapse_blank_lines(template.render(context)).strip() + '\n'
+
+
+def inject(existing: str, content: str, path: str) -> str:
+    """Put `content` between the markers in `existing`, keeping the rest.
+
+    This is how documentation lives inside a hand-written README instead of
+    in a file of its own: the prose around the markers is the author's, and
+    only what is between them is ours to replace.
+    """
+    begin = existing.find(INJECT_BEGIN)
+    end = existing.find(INJECT_END)
+    if begin == -1 or end == -1:
+        raise UsageError(
+            f'{path} has no place to inject into; it needs a line saying '
+            f'{INJECT_BEGIN} and a later one saying {INJECT_END}'
+        )
+    if end < begin:
+        raise UsageError(
+            f'{path} has {INJECT_END} before {INJECT_BEGIN}, so there is '
+            'nothing between them'
+        )
+    head = existing[: begin + len(INJECT_BEGIN)]
+    return f'{head}\n{content.strip()}\n\n{existing[end:]}'

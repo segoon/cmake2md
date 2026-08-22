@@ -272,22 +272,28 @@ to configure, so it is not in the list; it is still in `commands`. A
 | `symbol_link(symbols)` | Link a name to its own section when `symbols` defines it, else leave it as written. |
 | `render` | Concatenate the `pretty` field of a collection. |
 
-### The built-in template
+### The built-in templates
 
-`symbol.pretty` is produced by the packaged `function.md.jinja`. Put a file of
-that name in a `--template-dir` (or the working directory) to replace it.
+Two templates ship with cmake2md, and `--list-templates` names them.
 
-It also works as a whole document on its own, which documents every documented
-function and macro and needs no template of your own:
+`reference.md.jinja` is a whole document: a table of contents, every
+documented function and macro laid out by `@defgroup`, and a table of the
+build options. A project that wants documentation without writing a template
+needs only:
 
 ```sh
-cmake2md --template function.md.jinja --output docs/functions.md CMakeLists.txt
+cmake2md --template reference.md.jinja --output docs/reference.md .
 ```
+
+`function.md.jinja` renders a single symbol, and is what fills
+`symbol.pretty`; put a file of that name in a `--template-dir` (or the working
+directory) to change how every symbol is rendered. It also works as a whole
+document, listing every documented symbol and nothing else.
 
 ## Command line
 
 ```
-cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--json OUTPUT]
+cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--inject] [--json OUTPUT]
          [--exclude PATTERN]... [--require-docs] [--strict] [--check]
          CMAKE_FILE...
 ```
@@ -297,6 +303,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--json OUTPUT]
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
+| `--inject` | Write between the markers of an existing `--output` file instead of replacing it. |
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
 | `--require-docs` | Exit non-zero if a public `function()` or `macro()` has no doc comment. |
@@ -322,6 +329,21 @@ outright; neither is required to be documented.
 A `.cmake2mdignore` file in the working directory lists further `--exclude`
 patterns, one per line, `#` starting a comment.
 
+### Injecting into a README
+
+`--inject` keeps the documentation inside a file the author writes, rather
+than in one of its own. Mark the place once:
+
+```markdown
+# My project
+
+<!-- BEGIN_CMAKE2MD -->
+<!-- END_CMAKE2MD -->
+```
+
+and everything between the markers is replaced on each run, leaving the prose
+around them alone. It composes with `--check`.
+
 ### JSON
 
 `--json` writes the same model a template is given:
@@ -336,6 +358,30 @@ patterns, one per line, `#` starting a comment.
 
 `schema_version` is bumped when a field disappears or changes meaning, never
 when one is added, so a consumer must ignore the fields it does not know.
+
+## In CI
+
+A pre-commit hook:
+
+```yaml
+repos:
+  - repo: https://github.com/segoon/cmake2md
+    rev: v0.1.0
+    hooks:
+      - id: cmake2md-check
+        args: [--template, reference.md.jinja, --output, docs/reference.md, .]
+```
+
+`cmake2md-check` fails when the documentation is out of date and shows what
+differs; `cmake2md` regenerates it instead, so the commit picks it up.
+
+A GitHub Action:
+
+```yaml
+- uses: segoon/cmake2md@v0.1.0
+  with:
+    args: --check --strict --template reference.md.jinja --output docs/reference.md .
+```
 
 ## Development
 

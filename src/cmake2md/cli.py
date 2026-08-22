@@ -73,6 +73,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help='Additional directory to search for templates. Repeatable.',
     )
     parser.add_argument(
+        '--inject',
+        action='store_true',
+        help=(
+            'Write into an existing --output file, between its '
+            f'{rendering.INJECT_BEGIN} and {rendering.INJECT_END} lines, '
+            'instead of replacing the whole file.'
+        ),
+    )
+    parser.add_argument(
         '--json',
         metavar='OUTPUT',
         help=(
@@ -324,8 +333,18 @@ def warn_duplicate_symbols(symbols: Sequence[parse.Symbol]) -> None:
             )
 
 
-def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
+def write_output(
+    path: pathlib.Path, content: str, check: bool, inject: bool = False
+) -> bool:
     """Write `content`, or in check mode report whether it is up to date."""
+    if inject:
+        if not path.exists():
+            raise UsageError(
+                f'--inject needs {path} to exist already, with the markers to '
+                'inject between'
+            )
+        content = rendering.inject(path.read_text(encoding='utf-8'), content, str(path))
+
     if check:
         if not path.exists():
             print(f'{path}: would be created', file=sys.stderr)
@@ -422,7 +441,7 @@ def run(args: argparse.Namespace) -> int:
         if output == STDOUT:
             sys.stdout.write(content)
         else:
-            ok &= write_output(pathlib.Path(output), content, args.check)
+            ok &= write_output(pathlib.Path(output), content, args.check, args.inject)
     return 0 if ok else 1
 
 

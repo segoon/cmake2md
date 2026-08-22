@@ -4,6 +4,14 @@
 
 ### Added
 
+- `--inject` writes between the `<!-- BEGIN_CMAKE2MD -->` and
+  `<!-- END_CMAKE2MD -->` markers of an existing file, so generated
+  documentation can live inside a hand-written README. It composes with
+  `--check`.
+- A second built-in template, `reference.md.jinja`: a whole document with a
+  table of contents, laid out by `@defgroup`, so a project needs no template
+  of its own.
+- A pre-commit hook (`cmake2md-check` and `cmake2md`) and a GitHub Action.
 - `--json OUTPUT` writes the parsed model as JSON, under a `schema_version`
   that is bumped only when a field disappears or changes meaning.
 - `--require-docs` fails the run on a public `function()` or `macro()` with no
