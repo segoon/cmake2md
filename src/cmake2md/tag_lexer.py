@@ -18,15 +18,16 @@ TAG_RE = re.compile(r'@([A-Za-z_][A-Za-z0-9_]*)')
 class Tag:
     name: str
     # 1-based line number within the comment block, for diagnostics only.
+    # Excluded from equality so that where a tag was written does not make it
+    # a different tag.
     line: int = dataclasses.field(default=0, compare=False)
 
 
 def tokenize(lines: Sequence[str]) -> list[Tag | str]:
     """Split comment lines into literal chunks and tags.
 
-    An '@' only starts a tag at the beginning of the text or after
-    whitespace, so 'user@example.com' stays literal.  '@@' is an escape for
-    a literal '@'.
+    An '@' only starts a tag at the beginning of the text or after whitespace,
+    which is what keeps an address such as 'user@example.com' in one piece.
     """
     text = '\n'.join(lines)
     tokens: list[Tag | str] = []

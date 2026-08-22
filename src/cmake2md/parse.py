@@ -89,10 +89,10 @@ class Command:
 def get_comments(file: File, node: Node) -> list[str]:
     """Collect the run of comment lines immediately above `node`.
 
-    A blank line ends the run, so an unrelated comment further up the file
-    is not absorbed into the documentation of this symbol.  The block is
-    dedented as a whole, so that the space in the conventional '# ' goes away
-    while indentation *within* the comment (lists, code blocks) survives.
+    A blank line ends the run, so an unrelated comment further up the file is
+    not absorbed into this symbol's documentation.  The run is dedented as one
+    block rather than line by line, which keeps indentation *within* the
+    comment — nested lists, code blocks — intact.
     """
     comments = []
 

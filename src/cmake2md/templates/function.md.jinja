@@ -1,10 +1,9 @@
 {#
   Renders a single function() or macro().
 
-  Used two ways: cmake2md renders it once per symbol to build
-  `symbol.pretty`, and it also works as a whole-document template
-  (`--template function.md.jinja`), where it documents every documented
-  function and macro.
+  Rendered with `symbol` set, this fills that symbol's `pretty` field; without
+  it, the same file serves as a whole document. Hence the dispatch at the
+  bottom, and the body living in a macro so both paths can share it.
 #}
 {% macro required(r) %}
 {%- if not r %}[{% endif %}

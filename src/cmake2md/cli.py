@@ -63,14 +63,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--strict',
         action='store_true',
-        help='Treat unknown @tags as errors instead of literal text.',
+        help=(
+            'Treat doubtful @tags as errors instead of literal text: an '
+            'unknown tag, or a known tag not followed by a name.'
+        ),
     )
     parser.add_argument(
         '--check',
         action='store_true',
         help=(
-            'Do not write anything; exit non-zero if any output would '
-            'differ from what is already on disk.'
+            'Do not write anything; exit non-zero if any output is missing '
+            'or differs from what is already on disk.'
         ),
     )
     parser.add_argument(
@@ -117,6 +120,8 @@ def enrich(
     if function_template is not None:
         res['pretty'] = function_template.render({'symbol': res}).strip()
     else:
+        # A command call has no signature of its own to render, so there is
+        # nothing for the function template to do with it.
         res['pretty'] = doc.description
     return res
 
@@ -133,6 +138,8 @@ def write_output(path: pathlib.Path, content: str, check: bool) -> bool:
         return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Explicit newline: on Windows the default would write CRLF, so generated
+    # documentation would differ per platform and --check would never settle.
     path.write_text(content, encoding='utf-8', newline='\n')
     return True
 
@@ -141,6 +148,9 @@ def run(args: argparse.Namespace) -> int:
     pairs = validate_args(args)
 
     specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]
+    # Most specific first: what the user asked for by -I, then the directory a
+    # template was named by path from, and the working directory only as a
+    # last resort before the built-ins.
     search_dirs = [pathlib.Path(d) for d in args.template_dir]
     search_dirs += [d for d, _ in specs if d is not None]
     search_dirs.append(pathlib.Path.cwd())

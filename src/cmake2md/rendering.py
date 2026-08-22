@@ -23,7 +23,10 @@ Item = dict[str, Any]
 
 def unquote(s: str) -> str:
     """Strip the surrounding double quotes of a quoted CMake argument."""
-    return s.removesuffix('"').removeprefix('"')
+    # Both quotes or neither: a lone '"' is part of the value, not a wrapper.
+    if len(s) >= 2 and s.startswith('"') and s.endswith('"'):
+        return s[1:-1]
+    return s
 
 
 def escape(s: str) -> str:
@@ -73,7 +76,12 @@ FILTERS = {
 
 
 def collapse_blank_lines(text: str) -> str:
-    """Collapse runs of blank lines, leaving fenced code blocks untouched."""
+    """Cap runs of blank lines at two, leaving fenced code blocks alone.
+
+    Templates that loop over symbols emit ragged vertical whitespace; two
+    blank lines are enough to separate sections in Markdown.  Inside a fence
+    the blank lines are content, so they are copied through as they are.
+    """
 
     def squeeze(chunk: str) -> str:
         return re.sub(r'\n{3,}', '\n\n\n', chunk)
@@ -140,4 +148,6 @@ def load_template(
 
 
 def render_document(template: jinja2.Template, context: dict[str, Any]) -> str:
+    # Whatever whitespace the template's control blocks leave at either end,
+    # a document ends with exactly one newline and no leading blank lines.
     return collapse_blank_lines(template.render(context)).strip() + '\n'

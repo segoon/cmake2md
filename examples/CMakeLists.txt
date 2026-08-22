@@ -51,7 +51,8 @@ endfunction()
 
 # Aborts the configuration with a message.
 #
-# A macro rather than a function, so that return() propagates to the caller.
+# A macro rather than a function, so that the arguments are substituted in the
+# caller's scope.
 #
 # @arg REASON why the build cannot continue
 macro(example_fail)

@@ -2,9 +2,12 @@
 
 This is the single place that knows the tag vocabulary.  To add a tag,
 register it in :data:`TAG_SPECS` and handle it in ``Parser._handle_tag``.
-Tags that are not registered are passed through into the description
-verbatim (or rejected outright in strict mode), so prose that happens to
-contain an '@' never breaks a documentation build.
+
+A doubtful '@' — an unregistered tag, or a registered one that is not
+followed by something name-shaped — is left in the description as written
+and only warned about, so that prose mentioning a tag does not break a
+documentation build.  ``--strict`` turns those warnings into errors.  A
+registered tag with *nothing* at all after it stays an error either way.
 """
 
 import dataclasses
@@ -157,7 +160,8 @@ class Parser:
         """Consume the word after `tag`, or return None if it is not a name.
 
         Nothing is consumed in the None case, so the caller can fall back to
-        treating the tag as literal text.
+        treating the tag as literal text.  A tag with no text after it at all
+        raises instead: there is nothing the author could have meant.
         """
         token = self._tokens[self._pos] if self._pos < len(self._tokens) else None
         m = _NAME_RE.match(token) if isinstance(token, str) else None

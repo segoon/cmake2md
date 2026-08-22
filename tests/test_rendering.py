@@ -9,6 +9,12 @@ def test_unquote():
     assert rendering.unquote('hello') == 'hello'
 
 
+def test_unquote_leaves_an_unpaired_quote_alone():
+    assert rendering.unquote('"hello') == '"hello'
+    assert rendering.unquote('hello"') == 'hello"'
+    assert rendering.unquote('"') == '"'
+
+
 def test_escape_quotes_variable_references():
     assert rendering.escape('${CMAKE_SOURCE_DIR}') == '"${CMAKE_SOURCE_DIR}"'
     assert rendering.escape('ON') == 'ON'
