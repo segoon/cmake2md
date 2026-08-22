@@ -52,8 +52,7 @@ so before anything else is added.
 - [x] JSON dump of the model, as a stable versioned schema
 - [x] inject into an existing README between markers, as terraform-docs does
 - [x] config file: `[tool.cmake2md]` in `pyproject.toml`, instead of N paired
-      `--template`/`--output` arguments in CI. Uses `tomllib`, so it needs
-      Python 3.11; on 3.10 it says so rather than pulling in `tomli`.
+      `--template`/`--output` arguments in CI
 - [x] `--require-docs`: fail on an undocumented public symbol, like
       rustdoc's `missing_docs`
 - [x] show a diff in `--check` instead of only "out of date"

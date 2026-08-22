@@ -303,9 +303,9 @@ document, listing every documented symbol and nothing else.
 ## Command line
 
 ```
-cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--inject] [--json OUTPUT]
-         [--exclude PATTERN]... [--require-docs] [--strict] [--check]
-         CMAKE_FILE...
+cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
+         [--json OUTPUT] [--exclude PATTERN]... [--require-docs]
+         [--strict] [--check] CMAKE_FILE...
 ```
 
 | Flag | Effect |
@@ -313,6 +313,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--inject] [--json OUTPUT]
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
+| `-c`, `--config` | Read the arguments from the `[tool.cmake2md]` table of a TOML file. |
 | `--inject` | Write between the markers of an existing `--output` file instead of replacing it. |
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
@@ -338,6 +339,28 @@ outright; neither is required to be documented.
 
 A `.cmake2mdignore` file in the working directory lists further `--exclude`
 patterns, one per line, `#` starting a comment.
+
+### The config file
+
+A CI step that renders three templates needs six paired arguments to say so,
+and they then have to be kept in step across a Makefile, a workflow file and a
+pre-commit hook. Say it once instead, in `pyproject.toml`:
+
+```toml
+[tool.cmake2md]
+template = ["reference.md.jinja"]
+output = ["docs/reference.md"]
+path = ["."]
+strict = true
+```
+
+and the CI step is `cmake2md` with nothing after it. Every long option has a
+setting of the same name, with `-` or `_` between words, and a lone string is
+accepted where a list belongs. Anything given on the command line wins over
+the file, so `cmake2md --output - .` still prints to the terminal.
+
+`pyproject.toml` is read when it has a `[tool.cmake2md]` table; `--config`
+names a different file, which must then exist.
 
 ### Injecting into a README
 

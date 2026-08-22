@@ -10,8 +10,7 @@
   it to `--strict`.
 - A config file: the `[tool.cmake2md]` table of `pyproject.toml`, or any TOML
   file named with `--config`, so a CI step is `cmake2md` and nothing else. The
-  command line always wins over it. It reads `tomllib`, so it needs Python
-  3.11; on 3.10 it says so rather than pulling in a dependency.
+  command line always wins over it.
 - Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
   including CMake's own `#[==[.rst:` house style. A symbol documented that way
   used to read as undocumented, silently.
@@ -79,6 +78,11 @@
   `return(PROPAGATE VAR)` calls in the body — except when the caller supplies
   the variable's name, which the code cannot reveal.
 - Each parameter records the line of the tag that introduced it, as `.line`.
+
+### Dependencies
+
+- `tomli`, on Python 3.10 only, to read the config file. From 3.11 the same
+  parser is `tomllib` in the standard library, and nothing is installed.
 
 ### Changed
 

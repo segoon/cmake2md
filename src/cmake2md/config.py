@@ -4,9 +4,9 @@ A CI step that renders three templates needs six paired arguments to say so,
 and they have to be kept in step across a Makefile, a workflow file and a
 pre-commit hook.  A config file says it once.
 
-Nothing here reaches for a TOML library that is not in the standard one:
-``tomllib`` arrived in Python 3.11, and on 3.10 a config file is refused with
-a message that says what to do instead.
+``tomllib`` arrived in Python 3.11; on 3.10 the same parser is the ``tomli``
+package it was vendored from, which is why that is a dependency there and
+nowhere else.
 """
 
 import pathlib
@@ -16,19 +16,23 @@ from typing import Any
 
 from .errors import UsageError
 
-# tomllib is standard from 3.11 on.  Held as a function rather than a module
-# so that this type-checks against 3.10 too, where the name does not exist.
-parse_toml: Callable[[str], dict[str, Any]] | None
+# tomllib is standard from 3.11 on, and is tomli vendored into CPython, so the
+# two branches are the same parser reached by different names.  They are held
+# as a function and an exception type rather than as a module so that both
+# branches type-check wherever this is checked from.
+parse_toml: Callable[[str], dict[str, Any]]
+#: What a malformed file raises.
+TomlError: type[Exception]
 if sys.version_info >= (3, 11):
     import tomllib
 
     parse_toml = tomllib.loads
-    #: What a malformed file raises.  TOMLDecodeError is a ValueError, so the
-    #: two branches catch the same thing.
-    TomlError: type[Exception] = tomllib.TOMLDecodeError
+    TomlError = tomllib.TOMLDecodeError
 else:  # pragma: no cover - depends on the interpreter
-    parse_toml = None
-    TomlError = ValueError
+    import tomli
+
+    parse_toml = tomli.loads
+    TomlError = tomli.TOMLDecodeError
 
 #: Where the settings live, and the file they live in by default.
 DEFAULT_FILE = 'pyproject.toml'
@@ -56,12 +60,6 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     An empty result means the file has nothing to say about cmake2md, which
     is not an error: a project may keep a pyproject.toml for other reasons.
     """
-    if parse_toml is None:
-        raise UsageError(
-            f'reading {path} needs Python 3.11 or newer, which is where '
-            'tomllib arrives; on 3.10, pass --template and --output instead'
-        )
-
     try:
         data = parse_toml(path.read_text(encoding='utf-8'))
     except OSError as exc:
