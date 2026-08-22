@@ -11,13 +11,13 @@ hands templates raw argument lists, which is where every comparable tool
 - split README.md -> DEVELOPMENT.md
 - integrate cmake2md into CMakeLists.txt
 
-## P1 — Source-derived signatures (in progress)
+## P1 — Source-derived signatures (done)
 
 - [x] read the keywords declared by `cmake_parse_arguments()`, both call forms
 - [x] read the positional parameters declared by `function(f NAME TYPE)`
 - [x] warn when the doc comment and the code disagree; `--strict` fails
-- [ ] output variables: `set(X ... PARENT_SCOPE)`, with a `@return` tag to
-      document them
+- [x] output variables: `set(X ... PARENT_SCOPE)` and `return(PROPAGATE X)`,
+      documented with `@return`
 
 ## P2 — Typed model for commands
 

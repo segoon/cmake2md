@@ -86,6 +86,28 @@ def test_an_undocumented_positional_is_reported(messages):
     ) == ['f takes TYPE but it is not documented; add @arg TYPE']
 
 
+RETURNING = """\
+# Computes a thing.
+#
+# {tags}
+function(compute)
+    set(RESULT "42" PARENT_SCOPE)
+endfunction()
+"""
+
+
+def test_a_documented_output_variable_the_code_does_not_set_is_reported(messages):
+    assert messages(RETURNING.format(tags='@return RESULT r\n# @return MISSING m')) == [
+        'MISSING is documented as @return but compute does not set it'
+    ]
+
+
+def test_an_undocumented_output_variable_is_reported(messages):
+    assert messages(RETURNING.format(tags='@arg NAME n')) == [
+        'compute sets RESULT but it is not documented; add @return RESULT'
+    ]
+
+
 def test_a_kind_the_code_does_not_declare_is_left_alone(messages):
     # The macro takes its argument through ${ARGV0}, which declares nothing,
     # so @arg is the author's word against no evidence at all.

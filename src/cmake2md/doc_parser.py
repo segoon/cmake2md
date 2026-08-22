@@ -26,6 +26,9 @@ class ParamKind(str, enum.Enum):
     Option = 'option'
     SingleArgParam = 'param'
     MultiArgParam = 'multiparam'
+    #: A variable the definition sets in its caller's scope: CMake's way of
+    #: returning a value, so it is documented like a parameter.
+    OutVar = 'return'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,6 +72,7 @@ class DocComment:
     options: list[Param]
     params: list[Param]
     multi_params: list[Param]
+    returns: list[Param]
     deprecated: bool
     #: Non-fatal problems found while parsing, reported by the CLI.
     warnings: list[DocWarning]
@@ -76,7 +80,13 @@ class DocComment:
     def all_params(self) -> list[Param]:
         """Every documented parameter, whatever its kind, in source order."""
         return sorted(
-            [*self.args, *self.options, *self.params, *self.multi_params],
+            [
+                *self.args,
+                *self.options,
+                *self.params,
+                *self.multi_params,
+                *self.returns,
+            ],
             key=lambda param: param.line,
         )
 
@@ -135,6 +145,7 @@ class Parser:
             options=of_kind(ParamKind.Option),
             params=of_kind(ParamKind.SingleArgParam),
             multi_params=of_kind(ParamKind.MultiArgParam),
+            returns=of_kind(ParamKind.OutVar),
             deprecated=self._deprecated,
             warnings=self._warnings,
         )

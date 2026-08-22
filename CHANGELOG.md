@@ -14,6 +14,11 @@
   documented twice. Anything the code does not state plainly — a keyword list
   built from a variable, two `cmake_parse_arguments()` calls, a macro reading
   `${ARGV0}` — is left unchecked rather than guessed at.
+- `@return NAME` documents a variable the definition sets in its caller's
+  scope, which is how CMake returns a value. The built-in template renders
+  them, and they are checked against the `set(VAR ... PARENT_SCOPE)` and
+  `return(PROPAGATE VAR)` calls in the body — except when the caller supplies
+  the variable's name, which the code cannot reveal.
 - Each parameter records the line of the tag that introduced it, as `.line`.
 
 ### Changed

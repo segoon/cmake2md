@@ -188,6 +188,10 @@ KEYWORD_KINDS = (
 )
 #: Node types that open a scope of their own.
 DEFINITION_TYPES = frozenset({'function_def', 'macro_def'})
+#: The keyword that makes a set() write into the caller's scope.
+PARENT_SCOPE = 'PARENT_SCOPE'
+#: return(PROPAGATE VAR...) does the same, since CMake 3.25.
+PROPAGATE = 'PROPAGATE'
 
 
 def argument_list_of(node: Node) -> Node | None:
@@ -243,6 +247,49 @@ def keyword_arguments(file: File, call: Node) -> list[Node] | None:
     return lists if len(lists) == len(KEYWORD_KINDS) else None
 
 
+def propagated_names(file: File, command: Node) -> list[Node] | None:
+    """The arguments of `command` that name a variable it writes to the caller.
+
+    None when the command propagates nothing.  The two ways to do it are
+    ``set(VAR ... PARENT_SCOPE)`` and ``return(PROPAGATE VAR...)``.
+    """
+    arguments = arguments_of(file, argument_list_of(command))
+    if not arguments:
+        return None
+
+    name = command_name(file, command)
+    if name == 'set' and argument_name(file, arguments[-1]) == PARENT_SCOPE:
+        return arguments[:1]
+    if name == 'return' and argument_name(file, arguments[0]) == PROPAGATE:
+        return arguments[1:]
+    return None
+
+
+def propagated_variables(file: File, body: Node | None) -> list[str] | None:
+    """The variables a definition sets in its caller's scope.
+
+    None when the code does not say: a definition that propagates nothing may
+    still hand a result back some other way — a macro simply sets the variable,
+    and a function is often told the name to write to by its caller.  Which is
+    also why a propagated name that is not literal makes the whole list
+    unknown: it is a name we cannot read, not one that is not there.
+    """
+    if body is None:
+        return None
+
+    names = []
+    for command in commands_in(body):
+        propagated = propagated_names(file, command)
+        if propagated is None:
+            continue
+        if any(contains_variable_ref(argument) for argument in propagated):
+            return None
+        names += [argument_name(file, argument) for argument in propagated]
+    # Deduplicated, keeping order: one variable is often set in several
+    # branches of the same if().
+    return list(dict.fromkeys(names)) or None
+
+
 def accepted_keywords(
     file: File, body: Node | None
 ) -> dict[ParamKind, list[str] | None]:
@@ -283,6 +330,7 @@ def extract_signature(
         accepts={
             ParamKind.Positional: names or None,
             **accepted_keywords(file, body),
+            ParamKind.OutVar: propagated_variables(file, body),
         }
     )
 

@@ -17,6 +17,15 @@ def tag(kind: ParamKind) -> str:
     return '@' + kind.value
 
 
+def does(kind: ParamKind) -> str:
+    """What a definition does with a parameter of `kind`."""
+    return 'sets' if kind == ParamKind.OutVar else 'takes'
+
+
+def does_not(kind: ParamKind) -> str:
+    return 'does not set' if kind == ParamKind.OutVar else 'does not accept'
+
+
 def check(item: parse.Documented, doc: DocComment) -> list[DocWarning]:
     """Report where `doc` disagrees with the code of `item`.
 
@@ -54,12 +63,12 @@ def _params_the_code_denies(symbol: parse.Symbol, doc: DocComment) -> list[DocWa
         if declared is None:
             message = (
                 f'{param.name} is documented as {tag(param.kind)} but '
-                f'{symbol.name} does not accept it'
+                f'{symbol.name} {does_not(param.kind)} it'
             )
         else:
             message = (
                 f'{param.name} is documented as {tag(param.kind)} but '
-                f'{symbol.name} takes it as {tag(declared)}'
+                f'{symbol.name} {does(declared)} it as {tag(declared)}'
             )
         warnings.append(DocWarning(message, param.line))
     return warnings
@@ -75,8 +84,8 @@ def _params_the_comment_omits(
             if name not in documented:
                 warnings.append(
                     DocWarning(
-                        f'{symbol.name} takes {name} but it is not documented; '
-                        f'add {tag(kind)} {name}',
+                        f'{symbol.name} {does(kind)} {name} but it is not '
+                        f'documented; add {tag(kind)} {name}',
                         # The tag is missing, so the best line to point at is
                         # the definition's own; location_at() resolves 0 to it.
                         line=0,

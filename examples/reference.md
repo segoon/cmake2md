@@ -47,6 +47,25 @@ example_add_test(
 * **TIMEOUT <value>** seconds before the test is considered hung
 * **SOURCES <value>...** the source files to compile
 
+## example_toolchain_version
+
+Looks up the version of a toolchain.
+
+The argument is named in the function() line and the result is set in the
+caller's scope, so cmake2md checks both against this comment.
+
+```
+example_toolchain_version(
+    <NAME>
+)
+```
+
+* <**NAME**> the toolchain to look up
+
+Sets in the caller's scope:
+
+* **EXAMPLE_TOOLCHAIN_VERSION** the version that was found
+
 
 ## Macros
 

@@ -21,6 +21,7 @@ def test_keywords_come_from_cmake_parse_arguments(accepts):
         ParamKind.Option: ['QUIET'],
         ParamKind.SingleArgParam: ['TIMEOUT'],
         ParamKind.MultiArgParam: ['SOURCES', 'DEPENDS'],
+        ParamKind.OutVar: None,
     }
 
 
@@ -99,6 +100,48 @@ def test_macros_have_signatures_too(symbols_of):
     )[0]
     assert symbol.signature.accepts[ParamKind.Positional] == ['NAME']
     assert symbol.signature.accepts[ParamKind.SingleArgParam] == ['T']
+
+
+def test_variables_set_in_the_parent_scope_are_read(accepts):
+    assert accepts('set(RESULT "42" PARENT_SCOPE)\nset(COUNT 1 PARENT_SCOPE)')[
+        ParamKind.OutVar
+    ] == ['RESULT', 'COUNT']
+
+
+def test_return_propagate_sets_variables_too(accepts):
+    assert accepts('return(PROPAGATE OUT COUNT)')[ParamKind.OutVar] == ['OUT', 'COUNT']
+
+
+def test_a_variable_set_in_two_branches_is_listed_once(accepts):
+    assert accepts(
+        'if(WIN32)\n'
+        '    set(RESULT "w" PARENT_SCOPE)\n'
+        'else()\n'
+        '    set(RESULT "u" PARENT_SCOPE)\n'
+        'endif()'
+    )[ParamKind.OutVar] == ['RESULT']
+
+
+def test_an_output_variable_named_by_the_caller_is_unknown(accepts):
+    # The name is whatever the caller passed in, so the list cannot be read.
+    assert accepts('set(${ARG_OUT} "v" PARENT_SCOPE)')[ParamKind.OutVar] is None
+
+
+def test_a_definition_propagating_nothing_says_nothing(accepts):
+    # Not "returns nothing": a macro sets its caller's variables directly, and
+    # a function may write a cache entry or a global property instead.
+    assert accepts('set(LOCAL "v")')[ParamKind.OutVar] is None
+
+
+def test_a_nested_definitions_output_stays_its_own(symbols_of):
+    outer, _ = symbols_of(
+        'function(outer)\n'
+        '    function(inner)\n'
+        '        set(RESULT "x" PARENT_SCOPE)\n'
+        '    endfunction()\n'
+        'endfunction()\n'
+    )
+    assert outer.signature.accepts[ParamKind.OutVar] is None
 
 
 def test_declares_reports_the_kind_a_name_is_taken_as(symbols_of):

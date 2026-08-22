@@ -85,6 +85,7 @@ ignored, and a symbol documented that way reads as undocumented.
 | `@option NAME` | function, macro | Valueless flag. |
 | `@param NAME` | function, macro | Keyword taking a single value. |
 | `@multiparam NAME` | function, macro | Keyword taking one or more values. |
+| `@return NAME` | function, macro | Variable set in the caller's scope: CMake's way of returning a value. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
@@ -124,12 +125,17 @@ CMakeLists.txt:3: function example_add_library: warning: example_add_library
 takes SOURCES but it is not documented; add @multiparam SOURCES
 ```
 
-Both call forms of `cmake_parse_arguments()` are understood, as are the named
-parameters of `function(f NAME TYPE)`. What the code does not state plainly is
-never guessed at, and so never warned about: a keyword list built from a
-variable, a body with two `cmake_parse_arguments()` calls in it, or a macro
-that reaches for `${ARGV0}` leaves the matching tags unchecked. Symbols with no
-doc comment at all are not reported either.
+Four things are read out of the code: both call forms of
+`cmake_parse_arguments()`, the named parameters of `function(f NAME TYPE)`,
+`set(VAR ... PARENT_SCOPE)` and `return(PROPAGATE VAR)` — the last two being
+what `@return` documents.
+
+What the code does not state plainly is never guessed at, and so never warned
+about. A keyword list built from a variable, a body with two
+`cmake_parse_arguments()` calls in it, a macro that reaches for `${ARGV0}`, or
+an output variable whose name the caller supplies
+(`set(${ARG_OUTPUT_VARIABLE} ... PARENT_SCOPE)`) all leave the matching tags
+unchecked. Symbols with no doc comment at all are not reported either.
 
 `--strict` turns these warnings into errors as well.
 
@@ -157,18 +163,19 @@ Each entry is a dict with:
 | Key | Description |
 |-----|-------------|
 | `name` | Function, macro or command name. |
-| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.warnings`. |
+| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.warnings`. |
 | `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
 | `type_` | Symbols only: `'function'` or `'macro'`. |
-| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param` and `.multiparam`. Each is a list of names, or `None` where the code does not say. |
+| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
 
-Each parameter in `doc.args` / `doc.options` / `doc.params` / `doc.multi_params`
-has `.name`, `.description`, `.required`, `.kind` and `.line`.
+Each parameter in `doc.args` / `doc.options` / `doc.params` /
+`doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
+`.kind` and `.line`.
 
 ### Filters
 
