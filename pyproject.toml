@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cmake2md"
+version = "0.1.0"
+description = "Documentation generator for CMake: extracts doxygen-like comments and renders them with Jinja templates"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+keywords = ["cmake", "documentation", "doxygen", "jinja", "markdown"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "jinja2>=3.0,<4",
+    # QueryCursor and the Query(language, source) constructor are 0.25 API.
+    "tree-sitter>=0.25,<0.26",
+    # Must be ABI-compatible with the tree-sitter core above; a mismatch
+    # surfaces as "Incompatible Language version" at import time.
+    "tree-sitter-cmake>=0.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "mypy>=1.8",
+    "ruff>=0.6",
+    "build>=1.0",
+]
+
+[project.scripts]
+cmake2md = "cmake2md.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/segoon/cmake2md"
+Source = "https://github.com/segoon/cmake2md"
+Issues = "https://github.com/segoon/cmake2md/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cmake2md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+order-by-type = false
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src", "tests"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["tree_sitter_cmake.*"]
+ignore_missing_imports = true

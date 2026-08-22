@@ -1,0 +1,56 @@
+{#
+  A generic cmake2md template.
+
+  Available context:
+    symbols   - documented function()s
+    commands  - every top-level command call (option(), set(), ...)
+
+  Both are dicts with: name, comments, group, location, filepath, line,
+  pretty, and doc (the parsed comment: description, args, options, params,
+  multi_params). Commands additionally carry args, the raw argument list.
+#}
+{% macro option_row(cmd) -%}
+| `{{ cmd.args[0] }}` | {{ cmd.args[1] | unquote | oneline | md_escape }} | `{{ cmd.args[2] | unquote | escape }}` |
+{%- endmacro %}
+
+{% macro variable_row(cmd) -%}
+| `{{ cmd.args[0] }}` | {{ cmd.args[4] | unquote | oneline | md_escape }} | `{{ cmd.args[1] | unquote | escape }}` |
+{%- endmacro %}
+
+{% macro option_table(cmds) %}
+| Option | Description | Default |
+|--------|-------------|---------|
+{%- for cmd in cmds %}
+{{ option_row(cmd) }}
+{%- endfor %}
+{% endmacro %}
+
+# API reference
+
+## Functions
+
+{% for symbol in symbols %}
+{{ symbol.pretty }}
+{% endfor %}
+
+# Build options
+
+## General
+
+{{ option_table(commands | only_command('option') | only_group(None)) }}
+
+## Build targets
+
+{{ option_table(commands | only_command('option') | only_group('build')) }}
+
+## Compilation modes
+
+{{ option_table(commands | only_command('option') | only_group('compilation')) }}
+
+## Paths
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+{%- for cmd in commands | only_command('set') | only_group('paths') %}
+{{ variable_row(cmd) }}
+{%- endfor %}
