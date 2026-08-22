@@ -87,8 +87,11 @@ ignored, and a symbol documented that way reads as undocumented.
 | `@multiparam NAME` | function, macro | Keyword taking one or more values. |
 | `@return NAME` | function, macro | Variable set in the caller's scope: CMake's way of returning a value. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
+| `@type NAME` | function, macro | What the *preceding* parameter's value should be. |
+| `@default VALUE` | function, macro | What the *preceding* parameter is worth when left out. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
 | `@defgroup NAME <title>` | a comment block of its own | Defines a group: its title is the rest of the line, its description the paragraphs below. |
+| `@file` | a comment block of its own | Marks the block as documenting the file it is in. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
 | `@internal` | function, macro, command | Marks the symbol as not part of the public interface. The `public` filter drops it. |
 | `@brief` | anything | A one-paragraph summary, distinct from the description. |
@@ -167,7 +170,7 @@ Register the tag there and handle it in `Parser._handle_tag`.
 
 ## Writing templates
 
-Templates receive four lists:
+Templates receive five lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
 - `variables` — every cache entry a user can set: `option()` and
@@ -176,10 +179,11 @@ Templates receive four lists:
   nested in a `function()` body or an `if()` block
 - `groups` — every `@defgroup`, in the order they were defined, each with a
   `name`, a `title` and a `description`
+- `files` — the `@file` comment blocks, each with the `doc` of the block
 
-All three are unfiltered on purpose: the `documented` filter drops the
-entries that carry no comment, and `only_command` selects the commands you
-actually document.
+They are unfiltered on purpose: the `documented` filter drops the entries
+that carry no comment, `public` drops the ones marked `@internal`, and
+`only_command` selects the commands you actually document.
 
 Each entry is a dict with:
 
@@ -203,8 +207,9 @@ Each entry is a dict with:
 
 Each parameter in `doc.args` / `doc.options` / `doc.params` /
 `doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
-`.kind` and `.line`. Each entry of `doc.sections` has `.kind` — the tag that
-opened it, without the `@` — `.text` and `.line`.
+`.kind`, `.line`, and `.type_` and `.default` from `@type` and `@default`.
+Each entry of `doc.sections` has `.kind` — the tag that opened it, without the
+`@` — `.text`, `.name` and `.line`.
 
 ### Groups
 
@@ -263,6 +268,8 @@ to configure, so it is not in the list; it is still in `commands`. A
 | `only_group(name)` | Keep only entries in the given `@ingroup` (use `None` for ungrouped). |
 | `documented` | Keep only entries that carry a doc comment. |
 | `public` | Drop the entries marked `@internal`. |
+| `anchor` | The anchor a Markdown heading holding the given text gets. |
+| `symbol_link(symbols)` | Link a name to its own section when `symbols` defines it, else leave it as written. |
 | `render` | Concatenate the `pretty` field of a collection. |
 
 ### The built-in template

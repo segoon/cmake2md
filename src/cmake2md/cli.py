@@ -305,7 +305,8 @@ def run(args: argparse.Namespace) -> int:
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
     # against.
-    groups = collect_groups([enrich(b, None, args.strict) for b in blocks])
+    documented_blocks = [enrich(b, None, args.strict) for b in blocks]
+    groups = collect_groups(documented_blocks)
     known = frozenset(group['name'] for group in groups)
 
     context = {
@@ -313,6 +314,7 @@ def run(args: argparse.Namespace) -> int:
         'commands': [enrich(c, None, args.strict, known) for c in commands],
         'variables': [enrich(v, None, args.strict, known) for v in variables],
         'groups': groups,
+        'files': [b for b in documented_blocks if b['doc'].documents_file],
     }
 
     ok = True

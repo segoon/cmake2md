@@ -4,6 +4,13 @@
 
 ### Added
 
+- `@type` and `@default` refine the parameter written above them, as
+  `@required` already did, and the built-in template prints them.
+- `@file`, in a comment block of its own, marks that block as documenting the
+  file; those blocks arrive as the `files` list.
+- `anchor` and `symbol_link` filters, so a `@see` naming a symbol the document
+  defines becomes a link to it and one naming anything else stays prose. The
+  built-in template links them.
 - `@defgroup NAME <title>`, written in a comment block of its own, gives a
   group a title, a description and a position in the document. Templates get
   them as `groups`, so `examples/reference.md.jinja` no longer names a single

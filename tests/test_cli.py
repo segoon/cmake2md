@@ -451,3 +451,61 @@ def test_example_renders(tmp_path):
     # from the ungrouped table.
     assert '`EXAMPLE_STATIC`' in text
     assert '_example_internal_helper' not in text
+
+
+FILE_DOC_SOURCE = """\
+# @file
+# @brief Helpers for building libraries.
+#
+# The longer story about this file.
+
+function(f)
+endfunction()
+"""
+
+
+def test_file_documentation_reaches_templates(tmp_path):
+    source = tmp_path / 'helpers.cmake'
+    source.write_text(FILE_DOC_SOURCE, encoding='utf-8')
+    file_template = tmp_path / 'files.md.jinja'
+    file_template.write_text(
+        '{% for f in files %}{{ f.doc.brief }}|{{ f.doc.description }}\n{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', file_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').strip() == (
+        'Helpers for building libraries.|The longer story about this file.'
+    )
+
+
+def test_see_links_to_a_symbol_the_document_defines(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a test.\n#\n# @see add_lib\n# @see other_project_fn\n'
+        'function(add_test_target)\nendfunction()\n\n'
+        '# Adds a library.\nfunction(add_lib)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+    text = out.read_text(encoding='utf-8')
+    assert '[add_lib](#add_lib)' in text
+    # A name this document does not define is left as prose.
+    assert 'other_project_fn' in text
+    assert '[other_project_fn]' not in text
+
+
+def test_parameter_type_and_default_are_rendered(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a test.\n#\n'
+        '# @param TIMEOUT @type seconds @default 30 before it is killed\n'
+        'function(f)\n'
+        '    cmake_parse_arguments(ARG "" "TIMEOUT" "" ${ARGN})\n'
+        'endfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+    assert '(seconds, default `30`)' in out.read_text(encoding='utf-8')

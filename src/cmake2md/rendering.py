@@ -50,6 +50,27 @@ def render(collection: Iterable[Item]) -> str:
     return ''.join(item['pretty'] + '\n' for item in collection)
 
 
+def anchor(name: str) -> str:
+    """The anchor a Markdown heading holding `name` gets.
+
+    The rule is the one GitHub and most Markdown renderers use: lowercase,
+    spaces to hyphens, everything else that is not a word character dropped.
+    """
+    return re.sub(r'[^\w-]', '', name.strip().lower().replace(' ', '-'))
+
+
+def symbol_link(name: str, collection: Iterable[Item]) -> str:
+    """Link `name` to its own section, if it is one of `collection`.
+
+    A name that nothing in the document defines is left as it was written:
+    a cross-reference to another project's function is still worth printing.
+    """
+    target = name.strip().removesuffix('()')
+    if any(item['name'] == target for item in collection):
+        return f'[{target}](#{anchor(target)})'
+    return name
+
+
 def only_command(collection: Iterable[Item], name: str) -> list[Item]:
     return [item for item in collection if item['name'] == name]
 
@@ -82,6 +103,8 @@ FILTERS = {
     'documented': documented,
     'public': public,
     'render': render,
+    'anchor': anchor,
+    'symbol_link': symbol_link,
 }
 
 

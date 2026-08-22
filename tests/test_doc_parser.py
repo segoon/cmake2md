@@ -261,3 +261,28 @@ def test_warnings_carry_the_line_too():
         tag_lexer.tokenize([' first line', ' see @nosuchtag']), first_line=40
     )
     assert [w.line for w in doc.warnings] == [41]
+
+
+def test_type_and_default_refine_the_preceding_parameter():
+    doc = parse(' @param TIMEOUT @type seconds @default 30 before it is killed')
+    param = doc.params[0]
+    assert param.type_ == 'seconds'
+    assert param.default == '30'
+    assert param.description == 'before it is killed'
+
+
+def test_type_without_a_parameter_is_an_error():
+    with pytest.raises(ParseError, match='@type must follow'):
+        parse(' @type seconds')
+
+
+def test_default_without_a_parameter_is_an_error():
+    with pytest.raises(ParseError, match='@default must follow'):
+        parse(' @default 30')
+
+
+def test_file_marks_the_block_as_documenting_the_file():
+    assert not parse(' Just prose.').documents_file
+    doc = parse(' @file', ' @brief What this file is for.')
+    assert doc.documents_file
+    assert doc.brief == 'What this file is for.'

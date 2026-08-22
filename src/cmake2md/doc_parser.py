@@ -60,6 +60,8 @@ BLOCK_TAGS = ('example',)
 BRIEF = 'brief'
 #: The tag that defines a group; its name is the group's, its text the title.
 DEFGROUP = 'defgroup'
+#: The tag that marks a comment block as documenting the file it is in.
+FILE = 'file'
 
 #: The recognised tag vocabulary.  Extension point: add an entry here and a
 #: matching branch in ``Parser._handle_tag`` — a tag that only carries text
@@ -75,6 +77,10 @@ TAG_SPECS: dict[str, TagSpec] = {
     DEFGROUP: TagSpec(takes_name=True, text=TagText.Paragraph),
     'deprecated': TagSpec(takes_name=False),
     'internal': TagSpec(takes_name=False),
+    FILE: TagSpec(takes_name=False),
+    # Like @required, these refine the parameter written just above them.
+    'type': TagSpec(takes_name=True),
+    'default': TagSpec(takes_name=True),
 }
 
 
@@ -84,6 +90,10 @@ class Param:
     name: str
     description: str
     required: bool
+    #: What the value should be, from @type; '' when unsaid.
+    type_: str = ''
+    #: The value used when the parameter is left out, from @default.
+    default: str = ''
     #: File line the tag that introduced this parameter is on.
     line: int = 0
 
@@ -126,6 +136,8 @@ class DocComment:
     deprecated: bool
     #: Marked @internal: documented, but not part of the public interface.
     internal: bool
+    #: Marked @file: the block documents the file it was found in.
+    documents_file: bool
     #: Non-fatal problems found while parsing, reported by the CLI.
     warnings: list[DocWarning]
 
@@ -176,6 +188,7 @@ class Parser:
         self._group_line = 0
         self._deprecated = False
         self._internal = False
+        self._documents_file = False
         self._params: list[Param] = []
         self._sections: list[Section] = []
         self._warnings: list[DocWarning] = []
@@ -212,6 +225,7 @@ class Parser:
             sections=self._sections,
             deprecated=self._deprecated,
             internal=self._internal,
+            documents_file=self._documents_file,
             warnings=self._warnings,
         )
 
@@ -266,6 +280,19 @@ class Parser:
             self._deprecated = True
         elif tag.name == 'internal':
             self._internal = True
+        elif tag.name == FILE:
+            self._documents_file = True
+        elif tag.name in ('type', 'default'):
+            if not isinstance(self._open, Param):
+                raise ParseError(
+                    f'@{tag.name} must follow one of '
+                    f'{", ".join("@" + k.value for k in ParamKind)}',
+                    line=self._file_line(tag),
+                )
+            if tag.name == 'type':
+                self._open.type_ = name
+            else:
+                self._open.default = name
 
         if not spec.takes_name:
             self._eat_leading_space()

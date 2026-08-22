@@ -33,7 +33,7 @@ hands templates raw argument lists, which is where every comparable tool
 - [ ] `mark_as_advanced()`, the CMake way of saying a variable is not for
       ordinary users — the same shape of work as `choices`
 
-## P3 — Tag vocabulary
+## P3 — Tag vocabulary (done)
 
 `TagSpec` now carries a `TagText` mode, so a tag that only holds prose needs a
 `TAG_SPECS` entry and nothing else.
@@ -44,12 +44,12 @@ hands templates raw argument lists, which is where every comparable tool
 - [x] `@since`, `@note`, `@warning`, `@todo`, `@see`
 - [x] `@internal` — hide a private helper deliberately rather than by the
       accident of it having no comment
-- [ ] stable anchors and auto-linking of symbol names, so `@see` becomes a
-      link rather than a name
+- [x] stable anchors, and `@see` linking to a symbol the document defines,
+      through the `anchor` and `symbol_link` filters
 - [x] `@defgroup NAME <title>` with a description and an ordering, so
       `examples/reference.md.jinja` stops hardcoding the group names
-- [ ] parameter types and default values
-- [ ] file-level documentation (`@file`)
+- [x] parameter types and default values, from `@type` and `@default`
+- [x] file-level documentation (`@file`), exposed as the `files` list
 
 ## P4 — Output and CI integration
 
