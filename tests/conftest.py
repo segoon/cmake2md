@@ -1,5 +1,7 @@
 import pytest
 
+from cmake2md import parse
+
 CMAKE_SOURCE = """\
 # This comment is separated by a blank line and must not be picked up.
 
@@ -36,3 +38,25 @@ def cmake_file(tmp_path):
     path = tmp_path / 'CMakeLists.txt'
     path.write_text(CMAKE_SOURCE, encoding='utf-8')
     return path
+
+
+@pytest.fixture
+def parsed(tmp_path):
+    """Parse a CMake snippet given as a string."""
+
+    def parse_source(source):
+        path = tmp_path / 'CMakeLists.txt'
+        path.write_text(source, encoding='utf-8')
+        return parse.parse_file(path)
+
+    return parse_source
+
+
+@pytest.fixture
+def symbols_of(parsed):
+    return lambda source: parse.extract_symbols(parsed(source))
+
+
+@pytest.fixture
+def variables_of(parsed):
+    return lambda source: parse.extract_variables(parsed(source))

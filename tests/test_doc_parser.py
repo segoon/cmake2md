@@ -60,6 +60,13 @@ def test_params_are_split_by_kind_and_keep_order():
     assert [p.name for p in doc.multi_params] == ['SOURCES', 'DEPENDS']
 
 
+def test_return_documents_an_output_variable():
+    doc = parse(' @return RESULT the computed value')
+    assert doc.returns[0].kind == ParamKind.OutVar
+    assert doc.returns[0].name == 'RESULT'
+    assert doc.returns[0].description == 'the computed value'
+
+
 def test_ingroup():
     doc = parse(' @ingroup compilation')
     assert doc.group == 'compilation'

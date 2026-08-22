@@ -85,6 +85,7 @@ ignored, and a symbol documented that way reads as undocumented.
 | `@option NAME` | function, macro | Valueless flag. |
 | `@param NAME` | function, macro | Keyword taking a single value. |
 | `@multiparam NAME` | function, macro | Keyword taking one or more values. |
+| `@return NAME` | function, macro | Variable set in the caller's scope: CMake's way of returning a value. |
 | `@required` | function, macro | Marks the *preceding* parameter as required. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
@@ -103,6 +104,41 @@ a tag cmake2md does not recognise, and a known tag that is not followed by
 something that looks like a name (`@ingroup, so …` is prose, not a group named
 `,`). Pass `--strict` to turn both into errors.
 
+### Checking the comment against the code
+
+A CMake function states its interface twice — once in the doc comment, once in
+its own body — and the two drift apart. cmake2md reads the second one and
+reports the disagreement:
+
+```cmake
+# @option QUIET be quiet
+# @multiparam SRCS the source files
+function(example_add_library)
+    cmake_parse_arguments(ARG "QUIET" "" "SOURCES" ${ARGN})
+endfunction()
+```
+
+```
+CMakeLists.txt:2: function example_add_library: warning: SRCS is documented as
+@multiparam but example_add_library does not accept it
+CMakeLists.txt:3: function example_add_library: warning: example_add_library
+takes SOURCES but it is not documented; add @multiparam SOURCES
+```
+
+Four things are read out of the code: both call forms of
+`cmake_parse_arguments()`, the named parameters of `function(f NAME TYPE)`,
+`set(VAR ... PARENT_SCOPE)` and `return(PROPAGATE VAR)` — the last two being
+what `@return` documents.
+
+What the code does not state plainly is never guessed at, and so never warned
+about. A keyword list built from a variable, a body with two
+`cmake_parse_arguments()` calls in it, a macro that reaches for `${ARGV0}`, or
+an output variable whose name the caller supplies
+(`set(${ARG_OUTPUT_VARIABLE} ... PARENT_SCOPE)`) all leave the matching tags
+unchecked. Symbols with no doc comment at all are not reported either.
+
+`--strict` turns these warnings into errors as well.
+
 ### Adding a tag
 
 The vocabulary is deliberately small and lives in one place:
@@ -112,13 +148,15 @@ Register the tag there and handle it in `Parser._handle_tag`.
 
 ## Writing templates
 
-Templates receive two lists:
+Templates receive three lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
+- `variables` — every cache entry a user can set: `option()` and
+  `set(... CACHE ...)`, parsed
 - `commands` — every command call (`option()`, `set()`, …), including calls
   nested in a `function()` body or an `if()` block
 
-Both lists are unfiltered on purpose: the `documented` filter drops the
+All three are unfiltered on purpose: the `documented` filter drops the
 entries that carry no comment, and `only_command` selects the commands you
 actually document.
 
@@ -127,17 +165,41 @@ Each entry is a dict with:
 | Key | Description |
 |-----|-------------|
 | `name` | Function, macro or command name. |
-| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.warnings`. |
+| `doc` | Parsed comment: `.description`, `.group`, `.deprecated`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.warnings`. |
 | `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
-| `type_` | Symbols only: `'function'` or `'macro'`. |
+| `type_` | Symbols: `'function'` or `'macro'`. |
+| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
+| `command` | Variables only: `'option'` or `'set'`. |
+| `type_` | Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
+| `default` | Variables only: the value the entry holds unless the user overrides it. |
+| `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
+| `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
 
-Each parameter in `doc.args` / `doc.options` / `doc.params` / `doc.multi_params`
-has `.name`, `.description`, `.required` and `.kind`.
+Each parameter in `doc.args` / `doc.options` / `doc.params` /
+`doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
+`.kind` and `.line`.
+
+### Build options
+
+`option(NAME "help" ON)` and `set(NAME value CACHE TYPE "help")` declare the
+same thing in a different order, so `variables` gives both of them one shape:
+
+```jinja
+| Option | Description | Default |
+|--------|-------------|---------|
+{%- for v in variables | only_group('build') %}
+| `{{ v.name }}` | {{ v.docstring | md_escape }} | `{{ v.default }}` |
+{%- endfor %}
+```
+
+A `set()` that writes no cache entry is a local variable rather than something
+to configure, so it is not in the list; it is still in `commands`. A
+`set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
 
 ### Filters
 
@@ -175,7 +237,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--strict] [--check] CMAKE_FILE.
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
-| `--strict` | Treat doubtful `@tags` as errors. |
+| `--strict` | Treat documentation warnings as errors: a doubtful `@tag`, or a comment that disagrees with the code. |
 | `--check` | Write nothing; exit non-zero if any output is missing or stale. |
 | `--list-templates` | List the built-in template names and exit. |
 | `--version` | Print the version and exit. |

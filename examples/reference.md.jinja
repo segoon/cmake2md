@@ -2,23 +2,19 @@
   A generic cmake2md template. See "Writing templates" in the README for the
   context it is given and the filters it may use.
 
-  The option() and set() rows index into cmd.args positionally, so they depend
-  on the argument order of those two commands: option(NAME "doc" DEFAULT) and
-  set(NAME VALUE CACHE TYPE "doc").
+  option() and set(... CACHE ...) both arrive as `variables`, already parsed,
+  so nothing here depends on the argument order of either command.
 #}
-{% macro option_row(cmd) -%}
-| `{{ cmd.args[0] }}` | {{ cmd.args[1] | unquote | oneline | md_escape }} | `{{ cmd.args[2] | unquote | escape }}` |
+{% macro describe(variable) -%}
+{{ variable.docstring | oneline | md_escape }}
+{%- if variable.choices %} (one of: {{ variable.choices | join(', ') }}){% endif %}
 {%- endmacro %}
 
-{% macro variable_row(cmd) -%}
-| `{{ cmd.args[0] }}` | {{ cmd.args[4] | unquote | oneline | md_escape }} | `{{ cmd.args[1] | unquote | escape }}` |
-{%- endmacro %}
-
-{% macro option_table(cmds) %}
-| Option | Description | Default |
+{% macro table(variables, heading) -%}
+| {{ heading }} | Description | Default |
 |--------|-------------|---------|
-{%- for cmd in cmds %}
-{{ option_row(cmd) }}
+{%- for variable in variables %}
+| `{{ variable.name }}` | {{ describe(variable) }} | `{{ variable.default | escape }}` |
 {%- endfor %}
 {% endmacro %}
 
@@ -40,20 +36,16 @@
 
 ## General
 
-{{ option_table(commands | only_command('option') | only_group(None)) }}
+{{ table(variables | only_group(None), 'Option') }}
 
 ## Build targets
 
-{{ option_table(commands | only_command('option') | only_group('build')) }}
+{{ table(variables | only_group('build'), 'Option') }}
 
 ## Compilation modes
 
-{{ option_table(commands | only_command('option') | only_group('compilation')) }}
+{{ table(variables | only_group('compilation'), 'Option') }}
 
 ## Paths
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-{%- for cmd in commands | only_command('set') | only_group('paths') %}
-{{ variable_row(cmd) }}
-{%- endfor %}
+{{ table(variables | only_group('paths'), 'Variable') }}

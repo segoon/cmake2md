@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `variables`, a third list templates are rendered with: every cache entry a
+  user can set, from `option()` and from `set(... CACHE ...)`, parsed into
+  `name`, `type_`, `default`, `docstring` and `choices`. A template no longer
+  has to know the argument order of either command, nor that the help string
+  is the second argument of one and the fifth of the other. `choices` comes
+  from `set_property(CACHE ... PROPERTY STRINGS ...)`.
+- The parameters a `function()` or `macro()` accepts are read from its own
+  code: the named parameters of `function(f NAME TYPE)` and the keyword lists
+  of `cmake_parse_arguments()`, in both of its call forms. Templates see them
+  as `symbol.signature`.
+- A doc comment that disagrees with the code it documents is reported: a
+  documented parameter the definition does not take, one documented as the
+  wrong kind, one the definition takes but the comment omits, and a name
+  documented twice. Anything the code does not state plainly — a keyword list
+  built from a variable, two `cmake_parse_arguments()` calls, a macro reading
+  `${ARGV0}` — is left unchecked rather than guessed at.
+- `@return NAME` documents a variable the definition sets in its caller's
+  scope, which is how CMake returns a value. The built-in template renders
+  them, and they are checked against the `set(VAR ... PARENT_SCOPE)` and
+  `return(PROPAGATE VAR)` calls in the body — except when the caller supplies
+  the variable's name, which the code cannot reveal.
+- Each parameter records the line of the tag that introduced it, as `.line`.
+
+### Changed
+
+- `--strict` now promotes every documentation warning to an error, not only a
+  doubtful `@tag`.
+
 ## 0.1.0 (2026-08-22)
 
 First release as a standalone project, extracted from the

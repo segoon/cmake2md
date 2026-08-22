@@ -47,6 +47,25 @@ example_add_test(
 * **TIMEOUT <value>** seconds before the test is considered hung
 * **SOURCES <value>...** the source files to compile
 
+## example_toolchain_version
+
+Looks up the version of a toolchain.
+
+The argument is named in the function() line and the result is set in the
+caller's scope, so cmake2md checks both against this comment.
+
+```
+example_toolchain_version(
+    <NAME>
+)
+```
+
+* <**NAME**> the toolchain to look up
+
+Sets in the caller's scope:
+
+* **EXAMPLE_TOOLCHAIN_VERSION** the version that was found
+
 
 ## Macros
 
@@ -71,14 +90,12 @@ example_fail(
 
 ## General
 
-
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_STATIC` | Link everything statically | `OFF` |
 
 
 ## Build targets
-
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -88,14 +105,14 @@ example_fail(
 
 ## Compilation modes
 
-
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_USE_SANITIZERS` | Build with sanitizers enabled | `OFF` |
+| `EXAMPLE_SANITIZERS` | Sanitizers to enable (one of: address, thread, undefined) | `address` |
 
 
 ## Paths
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+|--------|-------------|---------|
 | `EXAMPLE_TOOLCHAIN_DIR` | Toolchain location | `/usr/local/toolchain` |

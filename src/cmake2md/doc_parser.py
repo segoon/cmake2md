@@ -26,6 +26,9 @@ class ParamKind(str, enum.Enum):
     Option = 'option'
     SingleArgParam = 'param'
     MultiArgParam = 'multiparam'
+    #: A variable the definition sets in its caller's scope: CMake's way of
+    #: returning a value, so it is documented like a parameter.
+    OutVar = 'return'
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,6 +53,8 @@ class Param:
     name: str
     description: str
     required: bool
+    #: File line the tag that introduced this parameter is on.
+    line: int = 0
 
 
 @dataclasses.dataclass
@@ -67,9 +72,23 @@ class DocComment:
     options: list[Param]
     params: list[Param]
     multi_params: list[Param]
+    returns: list[Param]
     deprecated: bool
     #: Non-fatal problems found while parsing, reported by the CLI.
     warnings: list[DocWarning]
+
+    def all_params(self) -> list[Param]:
+        """Every documented parameter, whatever its kind, in source order."""
+        return sorted(
+            [
+                *self.args,
+                *self.options,
+                *self.params,
+                *self.multi_params,
+                *self.returns,
+            ],
+            key=lambda param: param.line,
+        )
 
 
 _NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
@@ -104,6 +123,7 @@ class Parser:
         self._name = ''
         self._description = ''
         self._required = False
+        self._line = 0
 
     def parse(self) -> DocComment:
         while self._pos < len(self._tokens):
@@ -125,6 +145,7 @@ class Parser:
             options=of_kind(ParamKind.Option),
             params=of_kind(ParamKind.SingleArgParam),
             multi_params=of_kind(ParamKind.MultiArgParam),
+            returns=of_kind(ParamKind.OutVar),
             deprecated=self._deprecated,
             warnings=self._warnings,
         )
@@ -154,6 +175,7 @@ class Parser:
             self._finalize_param()
             self._kind = ParamKind(tag.name)
             self._name = name
+            self._line = self._file_line(tag)
             # A positional argument is required by definition.
             self._required = self._kind == ParamKind.Positional
         elif tag.name == 'required':
@@ -215,6 +237,7 @@ class Parser:
                     name=self._name,
                     description=self._description.strip(),
                     required=self._required,
+                    line=self._line,
                 )
             )
         elif self._description.strip():
@@ -224,6 +247,7 @@ class Parser:
         self._name = ''
         self._description = ''
         self._required = False
+        self._line = 0
 
 
 def parse(

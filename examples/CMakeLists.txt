@@ -18,6 +18,10 @@ option(EXAMPLE_BUILD_DOCS "Build the HTML documentation" OFF)
 # @ingroup compilation
 option(EXAMPLE_USE_SANITIZERS "Build with sanitizers enabled" OFF)
 
+# @ingroup compilation
+set(EXAMPLE_SANITIZERS "address" CACHE STRING "Sanitizers to enable")
+set_property(CACHE EXAMPLE_SANITIZERS PROPERTY STRINGS address thread undefined)
+
 # Not tagged with @@ingroup, so it lands in the ungrouped table.
 option(EXAMPLE_STATIC "Link everything statically" OFF)
 
@@ -50,6 +54,17 @@ endfunction()
 # @param TIMEOUT seconds before the test is considered hung
 function(example_add_test)
     cmake_parse_arguments(ARG "" "TIMEOUT" "SOURCES" ${ARGN})
+endfunction()
+
+# Looks up the version of a toolchain.
+#
+# The argument is named in the function() line and the result is set in the
+# caller's scope, so cmake2md checks both against this comment.
+#
+# @arg NAME the toolchain to look up
+# @return EXAMPLE_TOOLCHAIN_VERSION the version that was found
+function(example_toolchain_version NAME)
+    set(EXAMPLE_TOOLCHAIN_VERSION "1.0" PARENT_SCOPE)
 endfunction()
 
 # Aborts the configuration with a message.

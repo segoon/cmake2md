@@ -11,6 +11,7 @@ and uses jinja templates to generate final documentation.
 
 # Development
 
+* git
 * .github
 * Makefile
 * tests/
@@ -18,7 +19,7 @@ and uses jinja templates to generate final documentation.
 
 ## Python
 
-Python, mypy, ruff, pyproject.toml.
+Python 3.10, mypy, ruff, pyproject.toml.
 
 * Use annotations.
 * Do not use `Any`, always set the strict direct type.

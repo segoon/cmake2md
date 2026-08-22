@@ -11,6 +11,7 @@ from typing import Any
 import jinja2
 
 from . import __version__
+from . import checks
 from . import doc_parser
 from . import parse
 from . import rendering
@@ -70,8 +71,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '--strict',
         action='store_true',
         help=(
-            'Treat doubtful @tags as errors instead of literal text: an '
-            'unknown tag, or a known tag not followed by a name.'
+            'Treat documentation warnings as errors: a doubtful @tag, and a '
+            'doc comment that disagrees with the code it documents.'
         ),
     )
     parser.add_argument(
@@ -162,8 +163,21 @@ def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
     return found
 
 
+def report(
+    item: parse.Documented,
+    warnings: Sequence[doc_parser.DocWarning],
+    strict: bool,
+) -> None:
+    """Print each warning, or fail on the first one under --strict."""
+    for warning in warnings:
+        location = item.location_at(warning.line)
+        if strict:
+            raise ParseError(warning.message, location)
+        print(f'{location}: warning: {warning.message}', file=sys.stderr)
+
+
 def enrich(
-    item: parse.Symbol | parse.Command,
+    item: parse.Documented,
     function_template: jinja2.Template | None,
     strict: bool,
 ) -> dict[str, Any]:
@@ -177,9 +191,7 @@ def enrich(
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    for warning in doc.warnings:
-        location = item.location_at(warning.line)
-        print(f'{location}: warning: {warning.message}', file=sys.stderr)
+    report(item, doc.warnings + checks.check(item, doc), strict)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -257,15 +269,18 @@ def run(args: argparse.Namespace) -> int:
 
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
+    variables: list[parse.Variable] = []
     for path in collect_sources(args.path):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
+        variables += parse.extract_variables(file)
     warn_duplicate_symbols(symbols)
 
     context = {
         'symbols': [enrich(s, function_template, args.strict) for s in symbols],
         'commands': [enrich(c, None, args.strict) for c in commands],
+        'variables': [enrich(v, None, args.strict) for v in variables],
     }
 
     ok = True
