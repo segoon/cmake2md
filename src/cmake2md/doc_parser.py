@@ -50,6 +50,8 @@ class Param:
     name: str
     description: str
     required: bool
+    #: File line the tag that introduced this parameter is on.
+    line: int = 0
 
 
 @dataclasses.dataclass
@@ -70,6 +72,13 @@ class DocComment:
     deprecated: bool
     #: Non-fatal problems found while parsing, reported by the CLI.
     warnings: list[DocWarning]
+
+    def all_params(self) -> list[Param]:
+        """Every documented parameter, whatever its kind, in source order."""
+        return sorted(
+            [*self.args, *self.options, *self.params, *self.multi_params],
+            key=lambda param: param.line,
+        )
 
 
 _NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
@@ -104,6 +113,7 @@ class Parser:
         self._name = ''
         self._description = ''
         self._required = False
+        self._line = 0
 
     def parse(self) -> DocComment:
         while self._pos < len(self._tokens):
@@ -154,6 +164,7 @@ class Parser:
             self._finalize_param()
             self._kind = ParamKind(tag.name)
             self._name = name
+            self._line = self._file_line(tag)
             # A positional argument is required by definition.
             self._required = self._kind == ParamKind.Positional
         elif tag.name == 'required':
@@ -215,6 +226,7 @@ class Parser:
                     name=self._name,
                     description=self._description.strip(),
                     required=self._required,
+                    line=self._line,
                 )
             )
         elif self._description.strip():
@@ -224,6 +236,7 @@ class Parser:
         self._name = ''
         self._description = ''
         self._required = False
+        self._line = 0
 
 
 def parse(

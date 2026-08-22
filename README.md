@@ -103,6 +103,36 @@ a tag cmake2md does not recognise, and a known tag that is not followed by
 something that looks like a name (`@ingroup, so …` is prose, not a group named
 `,`). Pass `--strict` to turn both into errors.
 
+### Checking the comment against the code
+
+A CMake function states its interface twice — once in the doc comment, once in
+its own body — and the two drift apart. cmake2md reads the second one and
+reports the disagreement:
+
+```cmake
+# @option QUIET be quiet
+# @multiparam SRCS the source files
+function(example_add_library)
+    cmake_parse_arguments(ARG "QUIET" "" "SOURCES" ${ARGN})
+endfunction()
+```
+
+```
+CMakeLists.txt:2: function example_add_library: warning: SRCS is documented as
+@multiparam but example_add_library does not accept it
+CMakeLists.txt:3: function example_add_library: warning: example_add_library
+takes SOURCES but it is not documented; add @multiparam SOURCES
+```
+
+Both call forms of `cmake_parse_arguments()` are understood, as are the named
+parameters of `function(f NAME TYPE)`. What the code does not state plainly is
+never guessed at, and so never warned about: a keyword list built from a
+variable, a body with two `cmake_parse_arguments()` calls in it, or a macro
+that reaches for `${ARGV0}` leaves the matching tags unchecked. Symbols with no
+doc comment at all are not reported either.
+
+`--strict` turns these warnings into errors as well.
+
 ### Adding a tag
 
 The vocabulary is deliberately small and lives in one place:
@@ -133,11 +163,12 @@ Each entry is a dict with:
 | `comments` | The raw comment lines, dedented. |
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
 | `type_` | Symbols only: `'function'` or `'macro'`. |
+| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param` and `.multiparam`. Each is a list of names, or `None` where the code does not say. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
 | `filepath`, `line`, `location` | Where the symbol was found. |
 
 Each parameter in `doc.args` / `doc.options` / `doc.params` / `doc.multi_params`
-has `.name`, `.description`, `.required` and `.kind`.
+has `.name`, `.description`, `.required`, `.kind` and `.line`.
 
 ### Filters
 
@@ -175,7 +206,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [--strict] [--check] CMAKE_FILE.
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
-| `--strict` | Treat doubtful `@tags` as errors. |
+| `--strict` | Treat documentation warnings as errors: a doubtful `@tag`, or a comment that disagrees with the code. |
 | `--check` | Write nothing; exit non-zero if any output is missing or stale. |
 | `--list-templates` | List the built-in template names and exit. |
 | `--version` | Print the version and exit. |

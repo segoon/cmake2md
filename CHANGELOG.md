@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The parameters a `function()` or `macro()` accepts are read from its own
+  code: the named parameters of `function(f NAME TYPE)` and the keyword lists
+  of `cmake_parse_arguments()`, in both of its call forms. Templates see them
+  as `symbol.signature`.
+- A doc comment that disagrees with the code it documents is reported: a
+  documented parameter the definition does not take, one documented as the
+  wrong kind, one the definition takes but the comment omits, and a name
+  documented twice. Anything the code does not state plainly — a keyword list
+  built from a variable, two `cmake_parse_arguments()` calls, a macro reading
+  `${ARGV0}` — is left unchecked rather than guessed at.
+- Each parameter records the line of the tag that introduced it, as `.line`.
+
+### Changed
+
+- `--strict` now promotes every documentation warning to an error, not only a
+  doubtful `@tag`.
+
 ## 0.1.0 (2026-08-22)
 
 First release as a standalone project, extracted from the

@@ -4,6 +4,8 @@ import abc
 import dataclasses
 import pathlib
 import textwrap
+from collections.abc import Iterator
+from collections.abc import Sequence
 
 import tree_sitter_cmake as tscmake
 from tree_sitter import Language
@@ -13,6 +15,8 @@ from tree_sitter import Query
 from tree_sitter import QueryCursor
 from tree_sitter import Tree
 
+from . import signature
+from .doc_parser import ParamKind
 from .errors import Cmake2mdError
 
 CMAKE_LANGUAGE = Language(tscmake.language())
@@ -28,11 +32,13 @@ SYMBOL_QUERY = Query(
     (function_command
       (function)
       (argument_list) @arguments)
+    (body)? @body
    ) @definition
   (macro_def
     (macro_command
       (macro)
       (argument_list) @arguments)
+    (body)? @body
    ) @definition
 ]
         """,
@@ -92,6 +98,8 @@ class Documented(abc.ABC):
 @dataclasses.dataclass
 class Symbol(Documented):
     type_: str
+    #: The parameters the definition's own code accepts.
+    signature: signature.Signature
 
     @property
     def kind(self) -> str:
@@ -170,6 +178,115 @@ def arguments_of(file: File, argument_list: Node | None) -> list[Node]:
     return [child for child in argument_list.children if child.type == 'argument']
 
 
+#: The command whose arguments declare the keywords a definition accepts.
+PARSE_ARGUMENTS_COMMAND = 'cmake_parse_arguments'
+#: The kinds cmake_parse_arguments() declares, in the order it takes them.
+KEYWORD_KINDS = (
+    ParamKind.Option,
+    ParamKind.SingleArgParam,
+    ParamKind.MultiArgParam,
+)
+#: Node types that open a scope of their own.
+DEFINITION_TYPES = frozenset({'function_def', 'macro_def'})
+
+
+def argument_list_of(node: Node) -> Node | None:
+    return next((c for c in node.children if c.type == 'argument_list'), None)
+
+
+def commands_in(node: Node) -> Iterator[Node]:
+    """Every command call below `node`, excluding nested definitions.
+
+    A function() defined inside another one parses its own arguments, and
+    those say nothing about the definition that encloses it.
+    """
+    for child in node.children:
+        if child.type in DEFINITION_TYPES:
+            continue
+        if child.type == 'normal_command':
+            yield child
+        else:
+            yield from commands_in(child)
+
+
+def command_name(file: File, command: Node) -> str:
+    identifier = next((c for c in command.children if c.type == 'identifier'), None)
+    return file.get_text(identifier) if identifier is not None else ''
+
+
+def contains_variable_ref(node: Node) -> bool:
+    """Whether `node` interpolates a variable, and so cannot be read as text."""
+    if node.type == 'variable_ref':
+        return True
+    return any(contains_variable_ref(child) for child in node.children)
+
+
+def keyword_list(file: File, argument: Node) -> list[str] | None:
+    """Split a ';'-separated keyword list, or None if it is not literal."""
+    if contains_variable_ref(argument):
+        return None
+    return [word for word in argument_name(file, argument).split(';') if word]
+
+
+def keyword_arguments(file: File, call: Node) -> list[Node] | None:
+    """The three keyword-list arguments of a cmake_parse_arguments() call.
+
+    Both call forms are accepted; PARSE_ARGV puts two more arguments in front.
+    A call too short to hold all three lists is malformed CMake, and tells us
+    nothing.
+    """
+    arguments = arguments_of(file, argument_list_of(call))
+    if not arguments:
+        return None
+    start = 3 if argument_name(file, arguments[0]) == 'PARSE_ARGV' else 1
+    lists = arguments[start : start + len(KEYWORD_KINDS)]
+    return lists if len(lists) == len(KEYWORD_KINDS) else None
+
+
+def accepted_keywords(
+    file: File, body: Node | None
+) -> dict[ParamKind, list[str] | None]:
+    unknown: dict[ParamKind, list[str] | None] = {kind: None for kind in KEYWORD_KINDS}
+    if body is None:
+        return unknown
+
+    calls = [
+        command
+        for command in commands_in(body)
+        if command_name(file, command) == PARSE_ARGUMENTS_COMMAND
+    ]
+    # More than one call: which of them shapes the documented interface is
+    # anyone's guess, and guessing wrong means a wrong diagnostic.
+    if len(calls) != 1:
+        return unknown
+
+    arguments = keyword_arguments(file, calls[0])
+    if arguments is None:
+        return unknown
+    return {
+        kind: keyword_list(file, argument)
+        for kind, argument in zip(KEYWORD_KINDS, arguments, strict=True)
+    }
+
+
+def extract_signature(
+    file: File, declared: Sequence[Node], body: Node | None
+) -> signature.Signature:
+    """Read the interface of a definition off its own code.
+
+    `declared` are the arguments of function()/macro() after the name.  An
+    empty list is reported as unknown rather than as "takes nothing": a macro
+    that reads ${ARGV0} declares no argument yet still takes one.
+    """
+    names = [argument_name(file, argument) for argument in declared]
+    return signature.Signature(
+        accepts={
+            ParamKind.Positional: names or None,
+            **accepted_keywords(file, body),
+        }
+    )
+
+
 def extract_symbols(file: File) -> list[Symbol]:
     """Extract every function() and macro() definition, documented or not."""
     symbols = []
@@ -184,11 +301,15 @@ def extract_symbols(file: File) -> list[Symbol]:
 
         definition = captures['definition'][0]
         block = get_comments(file, definition)
+        body = captures.get('body')
 
         symbols.append(
             Symbol(
                 name=argument_name(file, arguments[0]),
                 type_=definition.type.removesuffix('_def'),
+                signature=extract_signature(
+                    file, arguments[1:], body[0] if body else None
+                ),
                 comments=block.lines,
                 comments_line=block.line,
                 filepath=file.filepath,

@@ -11,6 +11,7 @@ from typing import Any
 import jinja2
 
 from . import __version__
+from . import checks
 from . import doc_parser
 from . import parse
 from . import rendering
@@ -70,8 +71,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '--strict',
         action='store_true',
         help=(
-            'Treat doubtful @tags as errors instead of literal text: an '
-            'unknown tag, or a known tag not followed by a name.'
+            'Treat documentation warnings as errors: a doubtful @tag, and a '
+            'doc comment that disagrees with the code it documents.'
         ),
     )
     parser.add_argument(
@@ -162,6 +163,19 @@ def collect_sources(paths: Sequence[str]) -> list[pathlib.Path]:
     return found
 
 
+def report(
+    item: parse.Documented,
+    warnings: Sequence[doc_parser.DocWarning],
+    strict: bool,
+) -> None:
+    """Print each warning, or fail on the first one under --strict."""
+    for warning in warnings:
+        location = item.location_at(warning.line)
+        if strict:
+            raise ParseError(warning.message, location)
+        print(f'{location}: warning: {warning.message}', file=sys.stderr)
+
+
 def enrich(
     item: parse.Symbol | parse.Command,
     function_template: jinja2.Template | None,
@@ -177,9 +191,7 @@ def enrich(
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    for warning in doc.warnings:
-        location = item.location_at(warning.line)
-        print(f'{location}: warning: {warning.message}', file=sys.stderr)
+    report(item, doc.warnings + checks.check(item, doc), strict)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc

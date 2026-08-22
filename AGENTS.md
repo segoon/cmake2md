@@ -11,6 +11,7 @@ and uses jinja templates to generate final documentation.
 
 # Development
 
+* git
 * .github
 * Makefile
 * tests/

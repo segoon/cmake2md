@@ -178,6 +178,54 @@ def test_warning_points_at_the_line_the_tag_is_on(template, tmp_path, capsys):
     assert f'{source}:2: function f: warning:' in capsys.readouterr().err
 
 
+MISMATCHED_SOURCE = """\
+# Adds a thing.
+#
+# @option QUIET be quiet
+# @multiparam SRCS the sources
+function(add_thing)
+    cmake_parse_arguments(ARG "QUIET" "" "SOURCES" ${ARGN})
+endfunction()
+"""
+
+
+def test_documentation_disagreeing_with_the_code_warns(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(MISMATCHED_SOURCE, encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+
+    err = capsys.readouterr().err
+    assert f'{source}:4: function add_thing: warning: SRCS is documented' in err
+    assert 'add_thing takes SOURCES but it is not documented' in err
+
+
+def test_strict_rejects_documentation_disagreeing_with_the_code(
+    template, tmp_path, capsys
+):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(MISMATCHED_SOURCE, encoding='utf-8')
+    assert run('--strict', '-t', template, '-o', tmp_path / 'out.md', source) == 1
+    assert 'SRCS is documented as @multiparam' in capsys.readouterr().err
+
+
+def test_the_signature_is_available_to_templates(tmp_path):
+    source = tmp_path / 'sig.cmake'
+    source.write_text(
+        '# Doc.\nfunction(f)\n'
+        '    cmake_parse_arguments(ARG "QUIET" "" "" ${ARGN})\n'
+        'endfunction()\n',
+        encoding='utf-8',
+    )
+    sig_template = tmp_path / 'sig.md.jinja'
+    sig_template.write_text(
+        '{% for s in symbols %}{{ s.signature.accepts.option }}{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', sig_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').strip() == "['QUIET']"
+
+
 def test_duplicate_symbol_is_reported(template, tmp_path, capsys):
     first = tmp_path / 'a.cmake'
     second = tmp_path / 'b.cmake'
