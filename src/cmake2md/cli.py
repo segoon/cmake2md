@@ -343,8 +343,16 @@ def enrich(
     function_template: jinja2.Template | None,
     rules: DocRules,
     groups: frozenset[str] = frozenset(),
+    reported: set[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
-    """Attach the parsed doc comment and a rendered form to `item`."""
+    """Attach the parsed doc comment and a rendered form to `item`.
+
+    An `option()` or `set(... CACHE ...)` call is read twice — once as a
+    `Command`, once as the `Variable` it also is — over the very same comment.
+    `reported` is how the two are kept from printing every diagnostic about it
+    twice: it is shared across a whole run, and a comment block is reported
+    only the first time its (file, line) is seen.
+    """
     try:
         doc = doc_parser.parse(
             tag_lexer.tokenize(item.comments),
@@ -355,7 +363,13 @@ def enrich(
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
+    # comments_line is 0 for an item with no comment at all, which carries no
+    # warnings to begin with, so nothing is lost by not deduplicating that.
+    key = (item.filepath, item.comments_line)
+    if reported is None or item.comments_line == 0 or key not in reported:
+        report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
+        if reported is not None and item.comments_line:
+            reported.add(key)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -515,16 +529,25 @@ def run(args: argparse.Namespace) -> int:
         blocks += parse.extract_blocks(file)
     warn_duplicate_symbols(symbols)
 
+    # Shared across every enrich() call below: an option()/set(... CACHE ...)
+    # is read once as a Command and once as the Variable it also is, over the
+    # same comment, and this is what keeps its diagnostics from printing twice.
+    reported: set[tuple[str, int]] = set()
+
     # Groups first: what they define is what an @ingroup elsewhere is checked
     # against.
-    documented_blocks = [enrich(b, None, rules) for b in blocks]
+    documented_blocks = [enrich(b, None, rules, reported=reported) for b in blocks]
     groups = collect_groups(documented_blocks)
     known = frozenset(group['name'] for group in groups)
 
     context = {
-        'symbols': [enrich(s, function_template, rules, known) for s in symbols],
-        'commands': [enrich(c, None, rules, known) for c in commands],
-        'variables': [enrich(v, None, rules, known) for v in variables],
+        'symbols': [
+            enrich(s, function_template, rules, known, reported) for s in symbols
+        ],
+        # Variables first, so a warning about an option()/set(... CACHE ...)
+        # is reported under its own name rather than the generic 'command'.
+        'variables': [enrich(v, None, rules, known, reported) for v in variables],
+        'commands': [enrich(c, None, rules, known, reported) for c in commands],
         'groups': groups,
         'files': [b for b in documented_blocks if b['doc'].documents_file],
     }

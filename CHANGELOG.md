@@ -12,6 +12,9 @@
 - `output = "-"` and `json = "-"` in `cmake2md.toml`, which mean "write to
   stdout", are no longer resolved against the config file's directory into a
   file literally called `-`.
+- A diagnostic about an `option()` or `set(... CACHE ...)` call is no longer
+  printed twice, once as a `Command` and once as the `Variable` it also is;
+  it is reported once, under the `Variable`'s own name.
 
 ### Added
 

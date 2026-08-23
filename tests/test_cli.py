@@ -163,6 +163,18 @@ def test_unknown_tag_is_rejected_by_default(template, unknown_tag, tmp_path, cap
     assert 'unknown tag @nosuchtag' in capsys.readouterr().err
 
 
+def test_an_option_warning_is_reported_once_not_twice(template, tmp_path, capsys):
+    # option() is read once as a Command and once as the Variable it also is,
+    # over the same comment; a warning about it must not be printed for both.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @nosuchtag\noption(FOO "help" ON)\n', encoding='utf-8')
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    err = capsys.readouterr().err
+    assert err.count('unknown tag @nosuchtag') == 1
+    # Reported under the Variable's own name, not the generic 'command'.
+    assert ': option FOO: warning:' in err
+
+
 def test_error_message_points_at_the_symbol(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text('# @param\nfunction(broken)\nendfunction()\n', encoding='utf-8')
