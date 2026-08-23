@@ -30,7 +30,7 @@ classifiers = [
 dependencies = [
     "jinja2>=3.0,<4",
     # QueryCursor and the Query(language, source) constructor are 0.25 API.
-    "tree-sitter>=0.25,<0.26",
+    "tree-sitter>=0.25,<0.27",
     # Must be ABI-compatible with the tree-sitter core above; a mismatch
     # surfaces as "Incompatible Language version" at import time.
     "tree-sitter-cmake>=0.5",
