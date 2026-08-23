@@ -60,3 +60,4 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * Test with `make check`
 * Run `make check` before `git commit`
 * Do not write 'Co-Authored-By' in commit description
+* Avoid dropping files git history, prefer `git mv`
