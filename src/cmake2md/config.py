@@ -57,13 +57,6 @@ class AgainstConfigFile:
     only_if_file: bool = False
 
 
-def _one_or_many(value: object) -> object:
-    """Accept a lone string where a list is expected, as TOML users expect."""
-    if isinstance(value, str):
-        return [value]
-    return value
-
-
 def _check_tag_name(name: str) -> str:
     """A key of the [tags] table: a name a tag can have, and not one taken."""
     # A tag the lexer would not read as one whole tag could never be written.
@@ -77,10 +70,10 @@ def _check_tag_name(name: str) -> str:
     return name
 
 
-#: A setting that takes a list, or the lone string that stands for one.  The
-#: items are strict: TOML has types of its own, so `path = [1]` is a mistake
-#: rather than something to read as "1".
-StrList = Annotated[list[pydantic.StrictStr], pydantic.BeforeValidator(_one_or_many)]
+#: A setting that takes several values.  Strict, item and all: TOML says what
+#: a value is, so `path = [1]` is a mistake rather than something to read as
+#: "1", and `path = "."` is a mistake rather than a list of one.
+StrList = list[pydantic.StrictStr]
 #: A key of the [tags] table.
 TagName = Annotated[str, pydantic.AfterValidator(_check_tag_name)]
 
@@ -255,7 +248,7 @@ _WRONG_TYPE = {
     'bool_type': 'must be true or false',
     'bool_parsing': 'must be true or false',
     'string_type': 'must be a string',
-    'list_type': 'must be a string or a list of them',
+    'list_type': 'must be a list of strings',
     'dict_type': 'must be a table',
     'model_type': 'must be a table',
     'model_attributes_type': 'must be a table',

@@ -477,7 +477,7 @@ def test_output_dash_from_the_config_file_writes_to_stdout(
     # but '-' means stdout and is not a path at all; resolving it the same
     # way would create a file literally called '-'.
     (tmp_path / config.DEFAULT_FILE).write_text(
-        'template = "function.md.jinja"\noutput = "-"\npath = "."\n',
+        'template = ["function.md.jinja"]\noutput = ["-"]\npath = ["."]\n',
         encoding='utf-8',
     )
     assert run(cwd=tmp_path) == 0
@@ -981,7 +981,7 @@ path = ["."]
 """
 
 #: The smallest config file that renders the directory it is in.
-BASE_CONFIG = 'template = "function.md.jinja"\noutput = "out.md"\npath = "."\n'
+BASE_CONFIG = 'template = ["function.md.jinja"]\noutput = ["out.md"]\npath = ["."]\n'
 
 
 def write_config(directory, extra=''):
@@ -1074,7 +1074,10 @@ def test_the_ignore_file_is_read_from_the_project_root(cmake_file, tmp_path):
         ('strict = "no"', 'strict must be true or false'),
         ('check = 1', 'check must be true or false'),
         ('json = 3', 'json must be a string'),
-        ('template = 3', 'template must be a string or a list of them'),
+        ('template = 3', 'template must be a list of strings'),
+        # A lone string is a mistake too, not a list of one: TOML says which
+        # of the two a value is, and the file should say what it means.
+        ('template = "reference.md.jinja"', 'template must be a list of strings'),
         # An item of the list, not the list: TOML has types of its own.
         ('template = [1]', 'template.0 must be a string'),
         ('tags = 3', '[tags] must be a table'),

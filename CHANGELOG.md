@@ -182,8 +182,11 @@
   `cmake2md.toml` may hold, of what type, and what each setting is worth when
   unsaid — the command line reads its defaults from the same place. The
   messages are unchanged: a `ValidationError` is translated into cmake2md's
-  own wording rather than shown as pydantic phrases it. A list item is now
-  type-checked too, so `path = [1]` is refused where it used to pass.
+  own wording rather than shown as pydantic phrases it.
+- A list setting in `cmake2md.toml` must be a list. `template = "ref.md.jinja"`
+  used to be taken as a list of one, and `path = [1]` as the string `"1"`;
+  both are now refused, so that the file says what it means. Write
+  `template = ["ref.md.jinja"]`.
 - `examples/` is one directory per output flavour — `md/`, `rest/` and
   `sphinx/` — each a self-contained project with its own `CMakeLists.txt`.
   The paths of the old `examples/CMakeLists.txt` and

@@ -37,6 +37,7 @@ came up too and stays decided against, below.
   table of them has to parse the raw `args` itself. CMinx treats them as
   first-class. Whether they belong in a *module* documentation tool is the
   open question.
+
 ## Decided against
 
 Recorded so they are not revisited: `@copydoc`, following `include()` and
