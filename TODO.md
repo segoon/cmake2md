@@ -8,10 +8,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Redundancy and duplication
 
-* `checks._group_problems` and `_misplaced_file_tag` each name their tag
-  (`DEFGROUP`, `@file`) rather than reading a `TagSpec` flag that says a tag
-  belongs in a comment block of its own; a third such tag would be a third
-  hand-written function rather than a row of data.
 * `function.md.jinja` hardcodes `Note:`, `Warning:` and `TODO:`, and lists
   the kinds it renders by name, although `Section.label` already carries
   those strings from `PROSE_TAGS`. Adding a built-in prose tag today means

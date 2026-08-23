@@ -75,6 +75,12 @@ class TagSpec:
     field: str = ''
     #: How a template labels the section this tag opens; '' for the rest.
     label: str = ''
+    #: Whether the tag only means something in a comment block that
+    #: documents nothing else, as @defgroup and @file do: written above a
+    #: function, macro, variable or command instead, it would attach to
+    #: nothing and silently do nothing.  checks.py reports that case for
+    #: every tag marked this way instead of naming each one by hand.
+    block_only: bool = False
 
 
 #: Tags that hold one paragraph of prose about the symbol, and how a template
@@ -115,11 +121,13 @@ TAG_SPECS: dict[str, TagSpec] = {
     BRIEF: TagSpec(TagTarget.Summary, text=TagText.Paragraph),
     # The title runs to the end of the line; the paragraphs below it are the
     # group's description, which is the enclosing comment block's own.
-    DEFGROUP: TagSpec(TagTarget.Section, takes_name=True, text=TagText.Paragraph),
+    DEFGROUP: TagSpec(
+        TagTarget.Section, takes_name=True, text=TagText.Paragraph, block_only=True
+    ),
     'ingroup': TagSpec(TagTarget.DocField, takes_name=True, field='group'),
     'deprecated': TagSpec(TagTarget.DocField, field='deprecated'),
     'internal': TagSpec(TagTarget.DocField, field='internal'),
-    FILE: TagSpec(TagTarget.DocField, field='documents_file'),
+    FILE: TagSpec(TagTarget.DocField, field='documents_file', block_only=True),
     # These refine the parameter written just above them.
     'required': TagSpec(TagTarget.ParamField, field='required'),
     'type': TagSpec(TagTarget.ParamField, takes_name=True, field='type_'),

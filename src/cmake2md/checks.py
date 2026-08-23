@@ -13,10 +13,11 @@ from collections.abc import Collection
 
 from . import parse
 from . import rendering
-from .doc_parser import DEFGROUP
 from .doc_parser import DocComment
 from .doc_parser import DocWarning
 from .doc_parser import ParamKind
+from .doc_parser import TAG_SPECS
+from .doc_parser import TagTarget
 
 #: Fence languages whose body is CMake and so worth parsing.
 _CMAKE_FENCES = frozenset({'', 'cmake'})
@@ -51,8 +52,8 @@ def check(
     documented already.
     """
     warnings = _broken_examples(doc)
-    warnings += _group_problems(item, doc, groups)
-    warnings += _misplaced_file_tag(item, doc)
+    warnings += _ingroup_names_no_group(doc, groups)
+    warnings += _misplaced_block_only_tags(item, doc)
     if isinstance(item, parse.Symbol) and _has_comment(item):
         warnings += _duplicate_params(doc)
         warnings += _params_the_code_denies(item, doc)
@@ -76,54 +77,61 @@ def cmake_snippets(text: str) -> list[str]:
     return [body for language, body in fences if language in _CMAKE_FENCES]
 
 
-def _group_problems(
-    item: parse.Documented, doc: DocComment, groups: Collection[str]
+def _ingroup_names_no_group(
+    doc: DocComment, groups: Collection[str]
 ) -> list[DocWarning]:
-    """Report an @ingroup naming no group, and an @defgroup that defines none.
+    """Report an @ingroup naming a group that no @defgroup defines.
 
-    The first is only checked once some group exists: a project that never
-    writes @defgroup is using @ingroup as a bare label, which is how cmake2md
-    worked before groups had titles, and is nothing to complain about.
+    Only checked once some group exists: a project that never writes
+    @defgroup is using @ingroup as a bare label, which is how cmake2md worked
+    before groups had titles, and is nothing to complain about.
     """
-    warnings = []
     if groups and doc.group is not None and doc.group not in groups:
-        warnings.append(
+        return [
             DocWarning(
                 f'@ingroup {doc.group} names a group that no @defgroup defines',
                 doc.group_line,
             )
-        )
+        ]
+    return []
 
-    if not isinstance(item, parse.Block):
-        for section in doc.of_kind(DEFGROUP):
+
+def _misplaced_block_only_tags(
+    item: parse.Documented, doc: DocComment
+) -> list[DocWarning]:
+    """Report a tag marked `block_only` written above anything but a Block.
+
+    @defgroup and @file each attach to the comment block as a whole rather
+    than to whatever the block happens to sit above; on a Symbol, Command or
+    Variable they would define or document nothing, and silently.
+    """
+    if isinstance(item, parse.Block):
+        return []
+
+    warnings = []
+    for name, spec in TAG_SPECS.items():
+        if not spec.block_only:
+            continue
+        if spec.target is TagTarget.Section:
+            for section in doc.of_kind(name):
+                warnings.append(
+                    DocWarning(
+                        f'@{name} {section.name} in the documentation of '
+                        f'{item.name} defines nothing; a group is defined in '
+                        'a comment block of its own',
+                        section.line,
+                    )
+                )
+        elif spec.target is TagTarget.DocField and getattr(doc, spec.field):
             warnings.append(
                 DocWarning(
-                    f'@defgroup {section.name} in the documentation of '
-                    f'{item.name} defines nothing; a group is defined in a '
-                    'comment block of its own',
-                    section.line,
+                    f'@{name} in the documentation of {item.name} documents '
+                    'nothing; a file is documented by a comment block of its '
+                    'own',
+                    line=0,
                 )
             )
     return warnings
-
-
-def _misplaced_file_tag(item: parse.Documented, doc: DocComment) -> list[DocWarning]:
-    """Report @file written above a function, macro, variable or command.
-
-    Like @defgroup, @file documents a comment block as a whole and has
-    nowhere else to attach: a Symbol, Command or Variable marked
-    documents_file would never reach `files`, so the tag would silently do
-    nothing.
-    """
-    if isinstance(item, parse.Block) or not doc.documents_file:
-        return []
-    return [
-        DocWarning(
-            f'@file in the documentation of {item.name} documents nothing; a '
-            'file is documented by a comment block of its own',
-            line=0,
-        )
-    ]
 
 
 def _broken_examples(doc: DocComment) -> list[DocWarning]:
