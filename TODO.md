@@ -8,8 +8,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Redundancy and duplication
 
-* `checks._FENCE_RE` and `rendering._FENCE_RE` are the same Markdown fence
-  written twice, once capturing and once not.
 * `checks._group_problems` and `_misplaced_file_tag` each name their tag
   (`DEFGROUP`, `@file`) rather than reading a `TagSpec` flag that says a tag
   belongs in a comment block of its own; a third such tag would be a third

@@ -18,7 +18,12 @@ INJECT_END = '<!-- END_CMAKE2MD -->'
 #: Shadowing this file from a `--template-dir` overrides the built-in one.
 FUNCTION_TEMPLATE_NAME = 'function.md.jinja'
 
-_FENCE_RE = re.compile(r'^```.*?^```', re.MULTILINE | re.DOTALL)
+#: A fenced code block: ``` optionally followed by a language name, then the
+#: body, then a closing ```. Named groups, so `checks.cmake_snippets` can pull
+#: the language and body apart while this module only needs the whole span.
+FENCE_RE = re.compile(
+    r'^```(?P<lang>\w*)[ \t]*\n(?P<body>.*?)^```', re.MULTILINE | re.DOTALL
+)
 
 #: One entry of the `symbols` or `commands` list a template is rendered with,
 #: as built by `cli.enrich`.
@@ -125,7 +130,7 @@ def collapse_blank_lines(text: str) -> str:
 
     out = []
     pos = 0
-    for m in _FENCE_RE.finditer(text):
+    for m in FENCE_RE.finditer(text):
         out.append(squeeze(text[pos : m.start()]))
         out.append(m.group())
         pos = m.end()

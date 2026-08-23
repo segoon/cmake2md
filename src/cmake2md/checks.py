@@ -9,17 +9,15 @@ The same idea applies to an ``@example``: the sample is CMake, so it can be
 parsed, which is as close to rustdoc's doc tests as a build language gets.
 """
 
-import re
 from collections.abc import Collection
 
 from . import parse
+from . import rendering
 from .doc_parser import DEFGROUP
 from .doc_parser import DocComment
 from .doc_parser import DocWarning
 from .doc_parser import ParamKind
 
-#: A fenced code block, capturing the language it declares and its body.
-_FENCE_RE = re.compile(r'^```(\w*)[ \t]*\n(.*?)^```', re.MULTILINE | re.DOTALL)
 #: Fence languages whose body is CMake and so worth parsing.
 _CMAKE_FENCES = frozenset({'', 'cmake'})
 
@@ -72,7 +70,7 @@ def cmake_snippets(text: str) -> list[str]:
     An @example is CMake unless it says otherwise, which it does by fencing
     the sample and naming another language.
     """
-    fences = _FENCE_RE.findall(text)
+    fences = rendering.FENCE_RE.findall(text)
     if not fences:
         return [text]
     return [body for language, body in fences if language in _CMAKE_FENCES]
