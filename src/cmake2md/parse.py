@@ -198,8 +198,10 @@ def comment_text(file: File, node: Node) -> list[str]:
     # A bracket comment usually opens and closes on lines of its own, and
     # those lines are punctuation rather than content.  CMake's house style
     # closes with '#]==]', whose '#' is inside the comment but is plainly
-    # part of the marker.
-    lines = body.split('\n')
+    # part of the marker.  splitlines() rather than split('\n'): the source
+    # may have CRLF line endings, and split('\n') would leave a stray '\r' on
+    # every line but the last.
+    lines = body.splitlines()
     if lines and not lines[0].strip():
         lines.pop(0)
     if lines and lines[-1].strip() in ('', '#'):

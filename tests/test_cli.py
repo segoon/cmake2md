@@ -1,4 +1,5 @@
 import pathlib
+import re
 
 import pytest
 
@@ -133,7 +134,11 @@ def test_write_output_reports_an_os_error_instead_of_a_traceback(tmp_path, monke
 
     monkeypatch.setattr(pathlib.Path, 'write_text', fail_to_write)
     out = tmp_path / 'out.md'
-    with pytest.raises(UsageError, match=f'cannot write {out}: Permission denied'):
+    # re.escape: a Windows path's backslashes would otherwise be read as
+    # regex escapes.
+    with pytest.raises(
+        UsageError, match=f'cannot write {re.escape(str(out))}: Permission denied'
+    ):
         cli.write_output(out, 'content\n', check=False)
 
 

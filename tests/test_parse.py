@@ -216,6 +216,27 @@ def test_a_bracket_comment_documents_the_symbol_below_it(parsed):
     assert '@arg NAME the target name' in symbol.comments
 
 
+def test_a_bracket_comment_with_crlf_line_endings_has_no_stray_carriage_return(
+    parsed,
+):
+    # A source file with Windows line endings is not unusual to encounter
+    # regardless of which OS cmake2md itself runs on; split('\n') used to
+    # leave a trailing '\r' on every line but the last.
+    symbol = parse.extract_symbols(
+        parsed(
+            '#[[ Adds a library.\r\n'
+            '\r\n'
+            '@arg NAME the target name\r\n'
+            ']]\r\n'
+            'function(add_lib)\r\n'
+            'endfunction()\r\n'
+        )
+    )[0]
+    assert symbol.comments[0] == ' Adds a library.'
+    assert '@arg NAME the target name' in symbol.comments
+    assert not any('\r' in line for line in symbol.comments)
+
+
 def test_cmakes_own_rst_bracket_style_is_understood(parsed):
     symbol = parse.extract_symbols(
         parsed(
