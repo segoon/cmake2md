@@ -296,8 +296,13 @@ def collect_sources(
     A directory is searched, and a pattern expanded, because the shells that
     would otherwise do it (and Windows' do not) are not always in the picture:
     cmake2md is typically run from a build system or a CI step.
+
+    A file reached twice — a directory and a glob both matching it, or the
+    same file named twice on the command line — is read once: reading it
+    again would document every symbol in it twice over.
     """
     found: list[pathlib.Path] = []
+    seen: set[pathlib.Path] = set()
     for path in paths:
         candidate = pathlib.Path(path)
         if candidate.is_dir():
@@ -313,7 +318,14 @@ def collect_sources(
             matches = sorted(pathlib.Path(m) for m in glob.glob(path, recursive=True))
         if not matches:
             raise UsageError(f'no CMake sources found at {path}')
-        found += [m for m in matches if not is_excluded(m, exclude)]
+        for match in matches:
+            if is_excluded(match, exclude):
+                continue
+            resolved = match.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            found.append(match)
     return found
 
 

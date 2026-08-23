@@ -15,6 +15,9 @@
 - A diagnostic about an `option()` or `set(... CACHE ...)` call is no longer
   printed twice, once as a `Command` and once as the `Variable` it also is;
   it is reported once, under the `Variable`'s own name.
+- A source file reached twice — a directory and an explicit path both
+  matching it, or the same argument given twice — is read once instead of
+  documenting every symbol in it twice over.
 
 ### Added
 

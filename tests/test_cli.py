@@ -446,6 +446,15 @@ def test_glob_pattern_is_expanded(template, tmp_path):
     assert '## from_glob' in out.read_text(encoding='utf-8')
 
 
+def test_a_source_named_twice_is_read_once(cmake_file, template, tmp_path):
+    # A directory and an explicit path to a file inside it can both match the
+    # same source; reading it twice would document every symbol in it twice.
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, tmp_path, cmake_file) == 0
+    text = out.read_text(encoding='utf-8')
+    assert text.count('## example_add_library') == 1
+
+
 def test_no_source_given_is_a_usage_error(template, tmp_path, capsys):
     assert run('-t', template, '-o', tmp_path / 'out.md') == 1
     assert 'no CMAKE_FILE given' in capsys.readouterr().err
