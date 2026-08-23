@@ -1139,6 +1139,22 @@ def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path, monke
     assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
 
+def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path, monkeypatch):
+    # str.capitalize() would lowercase everything after the first letter,
+    # turning @seeAlso into 'Seealso:' rather than 'SeeAlso:'.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        '# @brief Adds a thing.\n#\n# @seeAlso other_thing\n'
+        'function(add_thing)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    write_config(tmp_path, '\n[tags]\nseeAlso = {}\n')
+    assert run() == 0
+    assert '> **SeeAlso:** other_thing' in (tmp_path / 'out.md').read_text(
+        encoding='utf-8'
+    )
+
+
 @pytest.mark.parametrize(
     'tags, message',
     [

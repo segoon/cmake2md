@@ -48,6 +48,8 @@
   with nothing after it is a warning, since it would otherwise render as a
   bare `> **Note:**`. `@defgroup` with no title is unaffected: an empty one
   is not a mistake, since a group with no title reads by its own name.
+- A declared tag with no `label` of its own is labelled after itself with its
+  inner capitals kept, so `@seeAlso` reads `SeeAlso:` rather than `Seealso:`.
 
 ### Added
 

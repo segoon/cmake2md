@@ -196,7 +196,7 @@ def _as_tag(where: str, name: str, settings: Any) -> doc_parser.TagSpec:
     if not isinstance(settings, dict):
         raise UsageError(
             f'{where} {name} must be a table, as in '
-            f'{name} = {{ label = "{name.capitalize()}:" }}'
+            f'{name} = {{ label = "{_capitalized(name)}:" }}'
         )
 
     unknown = set(settings) - TAG_KEYS
@@ -213,8 +213,17 @@ def _as_tag(where: str, name: str, settings: Any) -> doc_parser.TagSpec:
         text=_as_text(where, name, settings.get('text', 'paragraph')),
         # Without a label of its own the tag is its own label, which reads
         # well enough for the @author and @rationale sort of tag.
-        label=_as_str(here, 'label', settings.get('label') or f'{name.capitalize()}:'),
+        label=_as_str(here, 'label', settings.get('label') or f'{_capitalized(name)}:'),
     )
+
+
+def _capitalized(name: str) -> str:
+    """Uppercase the first letter of `name`, leaving the rest as written.
+
+    str.capitalize() would also lowercase the rest, turning a tag such as
+    @myTag into the label 'Mytag:' rather than 'MyTag:'.
+    """
+    return name[:1].upper() + name[1:]
 
 
 def _is_tag_name(name: str) -> bool:
