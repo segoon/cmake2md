@@ -16,7 +16,7 @@ option(EXAMPLE_BUILD_TESTS "Build the test suite" ON)
 # What gets built, and what is left out.
 
 # Ungrouped: the domain has no group concept of its own, so it renders the
-# same as a grouped variable, but @ingroup is still optional here as it is
+# same as a grouped variable, but @@ingroup is still optional here as it is
 # in the other two examples.
 set(EXAMPLE_LOG_LEVEL "info" CACHE STRING "How much the build prints")
 set_property(CACHE EXAMPLE_LOG_LEVEL PROPERTY STRINGS quiet info verbose)
