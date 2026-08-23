@@ -45,8 +45,8 @@ parsed model of the file and gets out of the way.
 
 * Doxygen-like `@`-tags for arguments, options, params and more, extracted
   from comments above `function()`, `macro()` and command calls.
-* Output driven entirely by your own Jinja templates, with three built-in ones
-  to start from — Markdown or reStructuredText for Sphinx, out of the box.
+* Custom Jinja templates, with three built-in ones to start from —
+  Markdown or reStructuredText for Sphinx, out of the box.
 * A checking pass that compares the doc comment against what the CMake code
   actually accepts — and against `@example` blocks, which are parsed as
   CMake — catching drift a plain doc generator can't.
@@ -416,11 +416,14 @@ A GitHub Action:
 
 ### Writing templates
 
-Templates receive five lists:
+Templates receive six lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
 - `variables` — every cache entry a user can set: `option()` and
   `set(... CACHE ...)`, parsed
+- `targets` — every `add_library()`, `add_executable()`, `add_test()` and
+  `add_custom_target()` call, with its own name and kind, so a template
+  wanting a table of them does not have to parse `args` itself
 - `commands` — every command call (`option()`, `set()`, …), including calls
   nested in a `function()` body or an `if()` block
 - `groups` — every `@defgroup`, in the order they were defined, each with a
@@ -443,8 +446,9 @@ Each entry is a dict with:
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
 | `type_` | Symbols: `'function'` or `'macro'`. Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
 | `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
-| `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
-| `command` | Variables only: `'option'` or `'set'`. |
+| `args` | Commands and targets: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
+| `command` | Variables: `'option'` or `'set'`. Targets: `'add_library'`, `'add_executable'`, `'add_test'` or `'add_custom_target'`. |
+| `kind` | Targets only: `'library'`, `'executable'`, `'test'` or `'custom target'`, derived from `command`. |
 | `default` | Variables only: the value the entry holds unless the user overrides it. |
 | `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
 | `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
@@ -502,6 +506,12 @@ same thing in a different order, so `variables` gives both of them one shape:
 A `set()` that writes no cache entry is a local variable rather than something
 to configure, so it is not in the list; it is still in `commands`. A
 `set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
+
+The same is true of `targets`: an `add_library()` call is also in `commands`,
+promoted rather than removed, exactly as `option()`/`set(... CACHE ...)` are
+promoted into `variables`. `add_custom_command()` is not promoted — it names
+no target of its own, only an `OUTPUT` file or an existing `TARGET` — so it
+stays a plain command.
 
 #### Filters
 
@@ -589,7 +599,7 @@ your own devising would have nowhere to be written.
 {
   "schema_version": 1,
   "symbols": [{"name": "example_add_library", "doc": {"brief": "…"}}],
-  "variables": [], "commands": [], "groups": [], "files": []
+  "variables": [], "targets": [], "commands": [], "groups": [], "files": []
 }
 ```
 
@@ -614,10 +624,6 @@ gap between two neighbourhoods rather than new ground:
 | [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
 | [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |
 | [shdoc](https://github.com/reconquest/shdoc) | The same shape of problem for shell: a dynamic language whose interface is only stated in comments. |
-
-Where cmake2doc differs from all of them is the checking pass: the doc comment
-is compared against what the CMake code actually accepts, and the two are
-reported when they disagree.
 
 ## License
 

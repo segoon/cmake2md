@@ -21,6 +21,7 @@ def dump(context: entries.Context) -> str:
         'schema_version': SCHEMA_VERSION,
         'symbols': [dataclasses.asdict(item) for item in context.symbols],
         'variables': [dataclasses.asdict(item) for item in context.variables],
+        'targets': [dataclasses.asdict(item) for item in context.targets],
         'commands': [dataclasses.asdict(item) for item in context.commands],
         'groups': [dataclasses.asdict(item) for item in context.groups],
         'files': [dataclasses.asdict(item) for item in context.files],

@@ -194,6 +194,18 @@ def test_an_option_warning_is_reported_once_not_twice(template, tmp_path, capsys
     assert ': option FOO: warning:' in err
 
 
+def test_a_target_warning_is_reported_once_not_twice(template, tmp_path, capsys):
+    # add_library() is read once as a Command and once as the Target it also
+    # is, over the same comment; a warning about it must not print for both.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @nosuchtag\nadd_library(core a.cpp)\n', encoding='utf-8')
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    err = capsys.readouterr().err
+    assert err.count('unknown tag @nosuchtag') == 1
+    # Reported under the Target's own name, not the generic 'command'.
+    assert ': library core: warning:' in err
+
+
 def test_error_message_points_at_the_symbol(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text('# @param\nfunction(broken)\nendfunction()\n', encoding='utf-8')
@@ -706,6 +718,32 @@ def test_json_dump_carries_the_model_and_a_schema_version(cmake_file, tmp_path):
         'EXAMPLE_STATIC',
         'EXAMPLE_DIR',
     ]
+    # cmake_file defines no add_library()/add_executable()/add_test()/
+    # add_custom_target(), but the key is always present.
+    assert data['targets'] == []
+
+
+def test_json_dump_carries_targets(tmp_path):
+    import json
+
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @brief The core library.\n'
+        'add_library(core a.cpp)\n'
+        'add_test(NAME unit_tests COMMAND unit_runner)\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'model.json'
+    assert run('--json', out, source) == 0
+
+    targets = json.loads(out.read_text(encoding='utf-8'))['targets']
+    # `kind` is a derived property, not a dataclass field, so the JSON dump
+    # (a plain dataclasses.asdict()) carries `command` instead.
+    assert [(t['name'], t['command']) for t in targets] == [
+        ('core', 'add_library'),
+        ('unit_tests', 'add_test'),
+    ]
+    assert targets[0]['doc']['brief'] == 'The core library.'
 
 
 def test_json_alone_needs_no_template(cmake_file, tmp_path):
