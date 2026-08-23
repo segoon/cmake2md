@@ -10,6 +10,55 @@ own [Jinja](https://jinja.palletsprojects.com/) templates.
 Nothing about the output format is baked in: cmake2md hands your template a
 parsed model of the file and gets out of the way.
 
+## Major features
+
+* Doxygen-like `@`-tags for arguments, options, params and more, extracted
+  from comments above `function()`, `macro()` and command calls.
+* Output driven entirely by your own Jinja templates, with two built-in ones
+  to start from.
+* A checking pass that compares the doc comment against what the CMake code
+  actually accepts — and against `@example` blocks, which are parsed as
+  CMake — catching drift a plain doc generator can't.
+* `--inject` to keep generated docs inside an existing file, such as a
+  README, between two markers.
+* `--check` for CI, to fail a pipeline when generated docs are stale.
+* A `cmake2md.toml` config file, so a whole project's generation settings
+  live in one place instead of scattered across a Makefile and workflow
+  files.
+* A `cmake/cmake2md.cmake` module to run cmake2md as part of the build.
+* `--json` output for tools that aren't templates.
+* Cross-platform: Linux, macOS and Windows.
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of contents**
+
+- [Getting started](#getting-started)
+  - [System requirements](#system-requirements)
+  - [Installation](#installation)
+  - [Quick start](#quick-start)
+  - [Comment syntax](#comment-syntax)
+  - [Checking the comment against the code](#checking-the-comment-against-the-code)
+- [Integration into a CMake project](#integration-into-a-cmake-project)
+  - [Command line](#command-line)
+    - [The config file](#the-config-file)
+    - [Injecting into a README](#injecting-into-a-readme)
+  - [From CMake](#from-cmake)
+  - [In CI](#in-ci)
+- [Advanced features](#advanced-features)
+  - [Writing templates](#writing-templates)
+    - [Groups](#groups)
+    - [Build options](#build-options)
+    - [Filters](#filters)
+    - [The built-in templates](#the-built-in-templates)
+  - [Tags of your own](#tags-of-your-own)
+  - [JSON](#json)
+- [Development](#development)
+- [Prior art](#prior-art)
+- [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Getting started
 
 ### System requirements

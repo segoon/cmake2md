@@ -6,14 +6,16 @@ make check      # lint, type check and test, as CI does
 ```
 
 `make help` lists the rest: `test`, `lint`, `format`, `typecheck`, `example`
-(regenerate `examples/reference.md`), `dist`, `clean` and, for maintainers,
-`release-check`, `publish-test` and `publish`.
+(regenerate `examples/reference.md`), `toc` (regenerate the README's table of
+contents via [doctoc](https://github.com/thlorenz/doctoc), through `npx`),
+`dist`, `clean` and, for maintainers, `release-check`, `publish-test` and
+`publish`.
 
-Every pull request runs `make check example-check` on Linux, the test suite on
-Linux, macOS and Windows for each supported Python version, and a packaging
-smoke test. The `ci-ok` job summarises all of them; it is the single check to
-require in the branch protection rule, so that changing the test matrix never
-means editing that rule.
+Every pull request runs `make check example-check toc-check` on Linux, the
+test suite on Linux, macOS and Windows for each supported Python version, and
+a packaging smoke test. The `ci-ok` job summarises all of them; it is the
+single check to require in the branch protection rule, so that changing the
+test matrix never means editing that rule.
 
 ## How it fits together
 
