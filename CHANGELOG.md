@@ -18,6 +18,10 @@
 - A source file reached twice — a directory and an explicit path both
   matching it, or the same argument given twice — is read once instead of
   documenting every symbol in it twice over.
+- A second `@brief` or `@ingroup` in one doc comment is a warning, and the
+  first is kept, instead of silently overwriting it. A `@defgroup` naming a
+  group a previous one already defined is likewise a warning, and only the
+  first defines the group; previously the section was rendered twice.
 
 ### Added
 

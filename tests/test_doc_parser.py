@@ -176,6 +176,20 @@ def test_ingroup_with_surrounding_description():
     assert doc.description == 'Build with sanitizers.'
 
 
+def test_a_second_ingroup_is_a_warning_and_the_first_is_kept():
+    doc = parse(' @ingroup compilation', ' @ingroup build')
+    assert doc.group == 'compilation'
+    assert len(doc.warnings) == 1
+    assert '@ingroup is given more than once' in doc.warnings[0].message
+
+
+def test_a_second_brief_is_a_warning_and_the_first_is_kept():
+    doc = parse(' @brief One.', ' @brief Two.')
+    assert doc.brief == 'One.'
+    assert len(doc.warnings) == 1
+    assert '@brief is given more than once' in doc.warnings[0].message
+
+
 def test_multiline_param_description():
     doc = parse(' @param TIMEOUT seconds before', ' the test is killed')
     assert doc.params[0].description == 'seconds before\n the test is killed'

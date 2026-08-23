@@ -417,12 +417,24 @@ def collect_groups(blocks: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build the group list out of the @defgroup tags in `blocks`.
 
     The order is the order they were written in, which is the only ordering
-    the author gave and the one a table of contents wants.
+    the author gave and the one a table of contents wants. A name given to
+    more than one @defgroup is a warning rather than a second entry: nothing
+    would tell a reader which of the two definitions a symbol in that group
+    belongs under.
     """
     groups = []
+    first_seen: dict[str, str] = {}
     for block in blocks:
         doc = block['doc']
         for section in doc.of_kind(doc_parser.DEFGROUP):
+            earlier = first_seen.setdefault(section.name, block['location'])
+            if earlier != block['location']:
+                print(
+                    f'{block["location"]}: warning: @defgroup {section.name} '
+                    f'is already defined at {earlier}',
+                    file=sys.stderr,
+                )
+                continue
             groups.append(
                 {
                     'name': section.name,

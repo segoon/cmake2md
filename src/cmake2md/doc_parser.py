@@ -234,6 +234,9 @@ class Parser:
 
         self._doc_description = ''
         self._brief = ''
+        #: Whether @brief has already been read once, since '' does not tell
+        #: a brief left empty apart from one never given at all.
+        self._brief_given = False
         #: What the DocField tags set, by the attribute each names.
         self._fields: dict[str, str | bool] = {}
         #: Where each of those tags was written, for the diagnostics.
@@ -323,8 +326,16 @@ class Parser:
             case TagTarget.Param | TagTarget.Section | TagTarget.Summary:
                 self._open_sink(tag, spec, name)
             case TagTarget.DocField:
-                self._fields[spec.field] = value
-                self._field_lines[spec.field] = self._file_line(tag)
+                if spec.field in self._fields:
+                    self._warnings.append(
+                        DocWarning(
+                            f'@{tag.name} is given more than once; the first is kept',
+                            self._file_line(tag),
+                        )
+                    )
+                else:
+                    self._fields[spec.field] = value
+                    self._field_lines[spec.field] = self._file_line(tag)
             case TagTarget.ParamField:
                 if not isinstance(self._open, Param):
                     raise ParseError(
@@ -400,7 +411,16 @@ class Parser:
         elif isinstance(self._open, Section):
             self._open.text = text
             if self._is_summary:
-                self._brief = text
+                if self._brief_given:
+                    self._warnings.append(
+                        DocWarning(
+                            '@brief is given more than once; the first is kept',
+                            self._open.line,
+                        )
+                    )
+                else:
+                    self._brief = text
+                    self._brief_given = True
             else:
                 self._sections.append(self._open)
         elif text:

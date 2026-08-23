@@ -308,6 +308,22 @@ def test_groups_carry_their_title_description_and_order(tmp_path):
     ]
 
 
+def test_a_repeated_defgroup_name_is_reported_and_only_defined_once(tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @defgroup build Build targets\n#\n# Again.\n',
+        encoding='utf-8',
+    )
+    group_template = tmp_path / 'groups.md.jinja'
+    group_template.write_text(
+        '{% for g in groups %}{{ g.name }}\n{% endfor %}', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', group_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').splitlines().count('build') == 1
+    assert '@defgroup build is already defined at' in capsys.readouterr().err
+
+
 def test_ingroup_naming_an_undefined_group_warns(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(
