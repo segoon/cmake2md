@@ -7,6 +7,7 @@ import fnmatch
 import glob
 import pathlib
 import sys
+from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
 
@@ -34,8 +35,10 @@ IGNORE_FILE = '.cmake2mdignore'
 #: What each optional argument is worth when neither the command line nor the
 #: config file says.  argparse leaves them all None instead, so that silence is
 #: told apart from an explicit --no-strict, which the config file must not win
-#: over.
-DEFAULTS: dict[str, list[str] | bool] = {
+#: over.  'tags' is here without an option of its own: a vocabulary belongs in
+#: the config file, not on a command line.
+DEFAULTS: dict[str, list[str] | bool | dict[str, doc_parser.TagSpec]] = {
+    'tags': {},
     'template': [],
     'output': [],
     'template_dir': [],
@@ -202,9 +205,13 @@ def apply_config(args: argparse.Namespace) -> None:
 def apply_defaults(args: argparse.Namespace) -> None:
     """Settle whatever neither the command line nor the config file said."""
     for key, value in DEFAULTS.items():
-        if getattr(args, key, None) is None:
-            # A copy: the default list must not be shared between runs.
-            setattr(args, key, list(value) if isinstance(value, list) else value)
+        if getattr(args, key, None) is not None:
+            continue
+        # A copy: the empty default must not be shared between runs.
+        if isinstance(value, (list, dict)):
+            setattr(args, key, value.copy())
+        else:
+            setattr(args, key, value)
 
 
 def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
@@ -310,23 +317,32 @@ def report(
         print(f'{location}: warning: {warning.message}', file=sys.stderr)
 
 
+@dataclasses.dataclass(frozen=True)
+class DocRules:
+    """How a doc comment is read: the vocabulary, and how loudly to complain."""
+
+    specs: Mapping[str, doc_parser.TagSpec]
+    strict: bool
+
+
 def enrich(
     item: parse.Documented,
     function_template: jinja2.Template | None,
-    strict: bool,
+    rules: DocRules,
     groups: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Attach the parsed doc comment and a rendered form to `item`."""
     try:
         doc = doc_parser.parse(
             tag_lexer.tokenize(item.comments),
-            strict=strict,
+            strict=rules.strict,
             first_line=item.comments_line or item.line,
+            specs=rules.specs,
         )
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    report(item, doc.warnings + checks.check(item, doc, groups), strict)
+    report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -465,6 +481,11 @@ def run(args: argparse.Namespace) -> int:
         env, rendering.FUNCTION_TEMPLATE_NAME, search_dirs
     )
 
+    rules = DocRules(
+        specs=doc_parser.vocabulary(args.tags),
+        strict=args.strict,
+    )
+
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
     variables: list[parse.Variable] = []
@@ -481,14 +502,14 @@ def run(args: argparse.Namespace) -> int:
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
     # against.
-    documented_blocks = [enrich(b, None, args.strict) for b in blocks]
+    documented_blocks = [enrich(b, None, rules) for b in blocks]
     groups = collect_groups(documented_blocks)
     known = frozenset(group['name'] for group in groups)
 
     context = {
-        'symbols': [enrich(s, function_template, args.strict, known) for s in symbols],
-        'commands': [enrich(c, None, args.strict, known) for c in commands],
-        'variables': [enrich(v, None, args.strict, known) for v in variables],
+        'symbols': [enrich(s, function_template, rules, known) for s in symbols],
+        'commands': [enrich(c, None, rules, known) for c in commands],
+        'variables': [enrich(v, None, rules, known) for v in variables],
         'groups': groups,
         'files': [b for b in documented_blocks if b['doc'].documents_file],
     }

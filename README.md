@@ -128,6 +128,34 @@ that looks like a name (`@ingroup, so …` is prose, not a group named `,`).
 Both fail the run; pass `--no-strict` to have them reported as warnings and
 carry on.
 
+### Tags of your own
+
+The vocabulary above is what cmake2md means by a tag; what a *project* wants to
+record — an owner, a rationale, a ticket — is its own business. Declare it in
+the config file:
+
+```toml
+[tool.cmake2md.tags]
+author = { label = "Author:" }
+rationale = { text = "block", label = "Why:" }
+ticket = { takes_name = true, label = "Ticket:" }
+```
+
+and `@author` is a tag like any other: recognised rather than reported,
+rendered by the built-in template as `> **Author:** …`, and reachable from a
+template of your own as `doc.of_kind('author')`.
+
+| Setting | Meaning |
+|---------|---------|
+| `text` | `paragraph`, the default, ends at a blank line as `@note` does; `block` runs to the next tag, so the text may span paragraphs. |
+| `takes_name` | Whether a name follows the tag, as after `@ingroup`. It arrives as the section's `.name`. |
+| `label` | What a template calls it. Defaults to the tag's own name. |
+
+A declared tag opens a section, which is where anything a template has to
+render lives. A flag such as `@internal` or a field such as `@ingroup` cannot
+be declared this way: those write to a field of the parsed comment, and one of
+your own devising would have nowhere to be written.
+
 ### Checking the comment against the code
 
 A CMake function states its interface twice — once in the doc comment, once in
@@ -229,7 +257,8 @@ Each parameter in `doc.args` / `doc.options` / `doc.params` /
 `doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
 `.kind`, `.line`, and `.type_` and `.default` from `@type` and `@default`.
 Each entry of `doc.sections` has `.kind` — the tag that opened it, without the
-`@` — `.text`, `.name` and `.line`.
+`@` — `.text`, `.name`, `.line` and `.label`, which is what the tag says a
+template should call it.
 
 ### Groups
 
@@ -373,6 +402,10 @@ turned off explicitly counts as given, so `--no-strict` wins over a
 
 `pyproject.toml` is read when it has a `[tool.cmake2md]` table; `--config`
 names a different file, which must then exist.
+
+The one setting with no option behind it is the `[tool.cmake2md.tags]` table
+of [tags of your own](#tags-of-your-own): a vocabulary is a property of the
+project, not of the run.
 
 ### Injecting into a README
 

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Tags a project declares itself, in the `[tool.cmake2md.tags]` table of the
+  config file. A declared tag opens a section like `@note` does — `text`,
+  `takes_name` and `label` say how — so it is recognised rather than reported,
+  reachable as `doc.of_kind('author')`, and rendered by the built-in template
+  under its label without anyone writing a template.
 - `cmake/cmake2md.cmake`, a module whose `cmake2md_generate()` adds two build
   targets that run cmake2md — one that writes the documentation and a
   `-check` companion that verifies it — so a CMake project can document itself
@@ -88,6 +93,10 @@
 
 ### Changed
 
+- The tag vocabulary is data: every tag declares what it attaches to — a
+  parameter, a section, a field of the comment, a field of the parameter above
+  it — and the parser names no tag of its own. `doc.sections` entries carry a
+  `.label` as a result.
 - `@return` is now `@set_parent_scope`, which is what it documents: CMake's
   `return()` does something else entirely.
 - `--check` prints a diff of what differs instead of only reporting that

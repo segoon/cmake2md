@@ -413,6 +413,11 @@ class Parser:
         self._text = ''
 
 
+def vocabulary(custom: Mapping[str, TagSpec]) -> dict[str, TagSpec]:
+    """The built-in tags together with the ones a project declared itself."""
+    return {**TAG_SPECS, **custom}
+
+
 def parse(
     tokens: Sequence[tag_lexer.Tag | str],
     *,

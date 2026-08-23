@@ -286,3 +286,45 @@ def test_file_marks_the_block_as_documenting_the_file():
     doc = parse(' @file', ' @brief What this file is for.')
     assert doc.documents_file
     assert doc.brief == 'What this file is for.'
+
+
+CUSTOM = {
+    'author': doc_parser.TagSpec(
+        doc_parser.TagTarget.Section,
+        text=doc_parser.TagText.Paragraph,
+        label='Author:',
+    )
+}
+
+
+def parse_with(*lines, specs):
+    return doc_parser.parse(tag_lexer.tokenize(list(lines)), strict=True, specs=specs)
+
+
+def test_a_declared_tag_opens_a_section():
+    doc = parse_with(' @author Alice', specs=doc_parser.vocabulary(CUSTOM))
+    section = doc.of_kind('author')[0]
+    assert section.text == 'Alice'
+    assert section.label == 'Author:'
+
+
+def test_a_declared_tag_does_not_displace_the_builtin_ones():
+    doc = parse_with(
+        ' @brief Adds a thing.',
+        '',
+        ' @author Alice',
+        specs=doc_parser.vocabulary(CUSTOM),
+    )
+    assert doc.brief == 'Adds a thing.'
+    assert [section.kind for section in doc.sections] == ['author']
+
+
+def test_an_undeclared_tag_is_still_unknown():
+    with pytest.raises(ParseError, match='unknown tag @author'):
+        parse_with(' @author Alice', specs=doc_parser.TAG_SPECS)
+
+
+def test_the_summary_is_not_one_of_the_sections():
+    doc = parse(' @brief Adds a thing.')
+    assert doc.brief == 'Adds a thing.'
+    assert doc.sections == []

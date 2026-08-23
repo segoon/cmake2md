@@ -31,6 +31,19 @@
 {%- endfor %}
 {%- endmacro %}
 
+{#
+  The tags rendered by name above; everything else — a tag the project
+  declared in [tool.cmake2md.tags] — falls through to its own label, so a
+  custom tag shows up without anyone writing a template for it.
+#}
+{% set rendered_kinds = ['brief', 'example', 'note', 'warning', 'todo',
+                         'since', 'see', 'defgroup'] %}
+{% macro other_sections(doc) %}
+{%- for section in doc.sections if section.kind not in rendered_kinds %}
+{{ quoted(section.label, section.text) }}
+{%- endfor %}
+{%- endmacro %}
+
 {% macro function(symbol) %}
 {%- set has_params = symbol.doc.args or symbol.doc.options
                      or symbol.doc.params or symbol.doc.multi_params %}
@@ -94,6 +107,7 @@ Sets in the caller's scope:
 See also: {{ symbol.doc.of_kind('see') | map(attribute='text')
                    | map('symbol_link', symbols | default([])) | join(', ') }}
 {% endif %}
+{{- other_sections(symbol.doc) }}
 {%- endmacro -%}
 
 {% if symbol is defined %}

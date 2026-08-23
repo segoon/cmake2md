@@ -11,31 +11,52 @@ interpreter in the test matrix ever runs — a poor trade against one small
 dependency with nothing under it.
 """
 
+import enum
 import pathlib
 from typing import Any
 
 import tomli
 
+from . import doc_parser
+from . import tag_lexer
 from .errors import UsageError
 
 #: Where the settings live, and the file they live in by default.
 DEFAULT_FILE = 'pyproject.toml'
 TABLE = 'tool.cmake2md'
 
-#: Settings the file may carry, and whether each is a list.  Anything else in
-#: the table is a mistake worth pointing out rather than ignoring.
+
+class Kind(enum.Enum):
+    """The shape a setting's value has to have."""
+
+    List = 'list'
+    Scalar = 'scalar'
+    #: The [tool.cmake2md.tags] sub-table, which declares tags of the
+    #: project's own.
+    Tags = 'tags'
+
+
+#: Settings the file may carry.  Anything else in the table is a mistake worth
+#: pointing out rather than ignoring.
 KEYS = {
-    'template': True,
-    'output': True,
-    'template_dir': True,
-    'path': True,
-    'exclude': True,
-    'json': False,
-    'inject': False,
-    'strict': False,
-    'check': False,
-    'require_docs': False,
+    'template': Kind.List,
+    'output': Kind.List,
+    'template_dir': Kind.List,
+    'path': Kind.List,
+    'exclude': Kind.List,
+    'json': Kind.Scalar,
+    'inject': Kind.Scalar,
+    'strict': Kind.Scalar,
+    'check': Kind.Scalar,
+    'require_docs': Kind.Scalar,
+    'tags': Kind.Tags,
 }
+
+#: What a tag's own table may say, beyond which nothing is guessed at.
+TAG_KEYS = frozenset({'text', 'takes_name', 'label'})
+#: A custom tag holds text; a flag or a label would have nowhere on the parsed
+#: comment to be stored, so those stay built-in.
+TAG_TEXTS = (doc_parser.TagText.Paragraph, doc_parser.TagText.Block)
 
 
 def load(path: pathlib.Path) -> dict[str, Any]:
@@ -55,7 +76,7 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     if not isinstance(table, dict):
         raise UsageError(f'{path}: [{TABLE}] must be a table')
 
-    settings = {}
+    settings: dict[str, Any] = {}
     for key, value in table.items():
         name = key.replace('-', '_')
         if name not in KEYS:
@@ -64,7 +85,13 @@ def load(path: pathlib.Path) -> dict[str, Any]:
                 f'{path}: [{TABLE}] has no setting called {key}; '
                 f'the settings are: {known}'
             )
-        settings[name] = _as_list(path, key, value) if KEYS[name] else value
+        match KEYS[name]:
+            case Kind.List:
+                settings[name] = _as_list(path, key, value)
+            case Kind.Tags:
+                settings[name] = _as_tags(path, value)
+            case Kind.Scalar:
+                settings[name] = value
     return settings
 
 
@@ -75,3 +102,72 @@ def _as_list(path: pathlib.Path, key: str, value: Any) -> list[str]:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return list(value)
     raise UsageError(f'{path}: [{TABLE}] {key} must be a string or a list of them')
+
+
+def _as_tags(path: pathlib.Path, value: Any) -> dict[str, doc_parser.TagSpec]:
+    """Read [tool.cmake2md.tags] as the vocabulary the parser understands."""
+    where = f'{path}: [{TABLE}.tags]'
+    if not isinstance(value, dict):
+        raise UsageError(f'{where} must be a table, one entry per tag')
+
+    specs = {}
+    for name, settings in value.items():
+        specs[name] = _as_tag(where, name, settings)
+    return specs
+
+
+def _as_tag(where: str, name: str, settings: Any) -> doc_parser.TagSpec:
+    if not _is_tag_name(name):
+        raise UsageError(
+            f'{where} {name} is not a name a tag can have: a tag is written '
+            '@ and a letter or _, then letters, digits and _'
+        )
+    if name in doc_parser.TAG_SPECS:
+        raise UsageError(f'{where} @{name} is already a tag of cmake2md')
+    if not isinstance(settings, dict):
+        raise UsageError(
+            f'{where} {name} must be a table, as in '
+            f'{name} = {{ label = "{name.capitalize()}:" }}'
+        )
+
+    unknown = set(settings) - TAG_KEYS
+    if unknown:
+        raise UsageError(
+            f'{where} {name} has no setting called {sorted(unknown)[0]}; '
+            f'a tag takes: {", ".join(sorted(TAG_KEYS))}'
+        )
+
+    return doc_parser.TagSpec(
+        target=doc_parser.TagTarget.Section,
+        takes_name=_as_bool(where, name, settings.get('takes_name', False)),
+        text=_as_text(where, name, settings.get('text', 'paragraph')),
+        # Without a label of its own the tag is its own label, which reads
+        # well enough for the @author and @rationale sort of tag.
+        label=str(settings.get('label') or f'{name.capitalize()}:'),
+    )
+
+
+def _is_tag_name(name: str) -> bool:
+    """Whether the lexer would read '@name' as one whole tag."""
+    match = tag_lexer.TAG_RE.fullmatch('@' + name)
+    return match is not None
+
+
+def _as_bool(where: str, name: str, value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise UsageError(f'{where} {name}: takes_name must be true or false')
+    return value
+
+
+def _as_text(where: str, name: str, value: Any) -> doc_parser.TagText:
+    """How much of the text after the tag is the tag's own.
+
+    A custom tag has to hold text: there is nowhere on the parsed comment for
+    a flag or a label of the project's own devising to be stored.
+    """
+    allowed = [text.value for text in TAG_TEXTS]
+    if value not in allowed:
+        raise UsageError(
+            f'{where} {name}: text must be one of {", ".join(allowed)}, not {value!r}'
+        )
+    return doc_parser.TagText(value)

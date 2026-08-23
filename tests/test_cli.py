@@ -256,6 +256,9 @@ def test_builtin_template_renders_the_new_sections(tmp_path):
     assert 'Adds a thing.' in text
     assert 'The longer description.' in text
     assert '> **Note:** Call it early.' in text
+    # Once: the fallback that renders a declared tag must not also render the
+    # sections the template already knows by name.
+    assert text.count('Call it early.') == 1
     assert '```cmake\nadd_thing(NAME x)\n```' in text
     # @internal keeps a documented helper out of the public reference.
     assert '_helper' not in text
@@ -892,6 +895,68 @@ def test_the_config_file_can_turn_strict_off(
     )
     assert run() == 0
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def write_config(directory, tags):
+    """A config file rendering the current directory, plus a [tags] table."""
+    (directory / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
+        'output = "out.md"\npath = "."\n\n[tool.cmake2md.tags]\n' + tags,
+        encoding='utf-8',
+    )
+
+
+DOCUMENTED_WITH_A_CUSTOM_TAG = """\
+# @brief Adds a thing.
+#
+# @author Alice
+function(add_thing)
+endfunction()
+"""
+
+
+def test_a_tag_the_config_file_declares_is_rendered(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, 'author = { label = "Author:" }\n')
+    # Strict by default: an undeclared tag would fail the run instead.
+    assert run() == 0
+    assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, 'author = {}\n')
+    assert run() == 0
+    assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize(
+    'tags, message',
+    [
+        ('note = { label = "x" }\n', '@note is already a tag of cmake2md'),
+        ('author = { text = "none" }\n', 'text must be one of paragraph, block'),
+        ('author = { nosuch = 1 }\n', 'has no setting called nosuch'),
+        ('author = "paragraph"\n', 'author must be a table'),
+        ('"not a name" = {}\n', 'is not a name a tag can have'),
+        ('author = { takes_name = "yes" }\n', 'takes_name must be true or false'),
+    ],
+)
+def test_a_doubtful_tag_declaration_is_a_usage_error(
+    tags, message, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, tags)
+    assert run() == 1
+    assert message in capsys.readouterr().err
 
 
 def test_the_shipped_cmake_module_documents_itself(tmp_path):
