@@ -29,6 +29,13 @@ API reference
    :param NAME: the name of the test
    :param TIMEOUT: seconds before the test is considered hung
 
+.. cmake:command:: example_toolchain_version(<NAME>)
+
+   Looks up the version of a toolchain.
+
+   :param NAME: the toolchain to look up
+   :sets EXAMPLE_TOOLCHAIN_VERSION: the version that was found
+
 .. cmake:command:: example_fail(<REASON>)
 
    Aborts the configuration with a message.
@@ -43,3 +50,11 @@ Build options
    Build the test suite
 
    Defaults to ``ON``.
+
+.. cmake:variable:: EXAMPLE_LOG_LEVEL
+
+   How much the build prints
+
+   One of: quiet, info, verbose.
+
+   Defaults to ``info``.

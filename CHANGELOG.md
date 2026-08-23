@@ -56,6 +56,11 @@
 - A `##` line comment no longer keeps a stray `#` in its text; CMake attaches
   no meaning to how many `#` a comment line opens with, so a Doxygen-style
   `##` is stripped the same as a lone `#`.
+- `--inject` into an `.rst` output now looks for `.. BEGIN_CMAKE2MD` /
+  `.. END_CMAKE2MD`, a reStructuredText comment, instead of the HTML comment
+  it still uses for every other extension. docutils renders `<!-- -->` as
+  literal text rather than hiding it, so injecting into a `.rst` file used
+  to leave the markers themselves in the rendered output.
 
 ### Added
 

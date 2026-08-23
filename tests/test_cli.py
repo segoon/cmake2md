@@ -887,6 +887,54 @@ def test_inject_needs_the_file_to_exist(cmake_file, template, tmp_path, capsys):
     assert '--inject needs' in capsys.readouterr().err
 
 
+INJECTABLE_RST = """\
+My project
+==========
+
+Prose the author wrote.
+
+.. BEGIN_CMAKE2MD
+what was generated last time
+.. END_CMAKE2MD
+
+Prose after it.
+"""
+
+
+def test_inject_into_rst_uses_rst_comment_markers(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE_RST, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert text.startswith('My project\n==========\n\nProse the author wrote.\n')
+    assert text.endswith('Prose after it.\n')
+    assert '## example_add_library' in text
+    assert 'what was generated last time' not in text
+
+
+def test_inject_into_rst_is_idempotent(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE_RST, encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    once = out.read_text(encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    assert out.read_text(encoding='utf-8') == once
+    assert run('--check', '--inject', '-t', template, '-o', out, cmake_file) == 0
+
+
+def test_inject_into_rst_rejects_html_comment_markers(
+    cmake_file, template, tmp_path, capsys
+):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 1
+    err = capsys.readouterr().err
+    assert 'no place to inject into' in err
+    assert '.. BEGIN_CMAKE2MD' in err
+    assert '.. END_CMAKE2MD' in err
+
+
 def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_path):
     out = tmp_path / 'ref.md'
     assert run('-t', 'reference.md.jinja', '-o', out, cmake_file) == 0

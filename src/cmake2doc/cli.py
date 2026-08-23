@@ -97,7 +97,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             'Write into an existing --output file, between its '
-            f'{rendering.INJECT_BEGIN} and {rendering.INJECT_END} lines, '
+            f'{rendering.MARKDOWN_MARKERS.begin} and '
+            f'{rendering.MARKDOWN_MARKERS.end} lines (or, for a .rst output, '
+            f'{rendering.RST_MARKERS.begin} and {rendering.RST_MARKERS.end}), '
             'instead of replacing the whole file. --no-inject wins over '
             'inject = true in the config file.'
         ),

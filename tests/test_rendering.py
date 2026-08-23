@@ -156,6 +156,16 @@ def test_anchor_follows_the_markdown_heading_rule():
     assert rendering.anchor('  What (now)?  ') == 'what-now'
 
 
+def test_markers_for_picks_rst_comments_for_rst_output():
+    assert rendering.markers_for('docs/reference.rst') == rendering.RST_MARKERS
+
+
+def test_markers_for_defaults_to_html_comments():
+    assert rendering.markers_for('README.md') == rendering.MARKDOWN_MARKERS
+    # Only the *output* path matters, not a template's own extension.
+    assert rendering.markers_for('reference.rst.jinja') == rendering.MARKDOWN_MARKERS
+
+
 def test_symbol_link_only_links_what_the_document_defines():
     symbols = [item(name='example_add_library')]
     assert (

@@ -347,6 +347,20 @@ than in one of its own. Mark the place once:
 and everything between the markers is replaced on each run, leaving the prose
 around them alone. It composes with `--check`.
 
+The marker syntax depends on `--output`'s own extension, so it reads as a
+comment in the file it is written into: an `.rst` output gets a
+reStructuredText comment, since docutils does not hide an HTML comment the
+way a Markdown renderer does; anything else, including `.md`, gets the HTML
+comment above.
+
+```rst
+My project
+==========
+
+.. BEGIN_CMAKE2MD
+.. END_CMAKE2MD
+```
+
 ### From CMake
 
 `cmake/cmake2doc.cmake` adds targets that run cmake2doc as part of the build, so

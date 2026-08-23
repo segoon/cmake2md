@@ -31,3 +31,14 @@ containing `maintainer@example.com` (not a tag), an escaped `@@` sign, an
 `@@ingroup` mentioned in prose rather than used as a tag, and a comment block
 ended by a blank line. This is the example the test suite asserts on, so those
 details live here rather than being spread across the other two.
+
+To fold the same output into this README instead of a `reference.md` of its
+own, mark a place with `<!-- BEGIN_CMAKE2MD -->` / `<!-- END_CMAKE2MD -->`
+and add `--inject`:
+
+```shell
+cmake2doc --inject \
+    --template examples/md/reference.md.jinja \
+    --output README.md \
+    examples/md/CMakeLists.txt
+```

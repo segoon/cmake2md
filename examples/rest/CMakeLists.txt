@@ -24,6 +24,8 @@ set_property(CACHE EXAMPLE_LOG_LEVEL PROPERTY STRINGS quiet info verbose)
 # The description, the parameters and the sections below all survive the
 # journey into reStructuredText.
 #
+# @since 0.2
+#
 # @note Call this after project(), so that the compiler is known.
 #
 # @example
@@ -40,6 +42,16 @@ function(example_add_library)
     cmake_parse_arguments(
         ARG "EXCLUDE_FROM_ALL" "OUTPUT_NAME" "SOURCES" ${ARGN}
     )
+endfunction()
+
+# Registers a test executable.
+#
+# @deprecated use example_add_library() instead.
+#
+# @arg NAME the name of the test
+# @param TIMEOUT seconds before the test is considered hung
+function(example_add_test)
+    cmake_parse_arguments(ARG "" "TIMEOUT" "" ${ARGN})
 endfunction()
 
 # Looks up the version of a toolchain.
