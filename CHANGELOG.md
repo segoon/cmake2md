@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- A tag that takes a name (`@ingroup`, `@type`, `@default`, `@defgroup`,
+  the parameter tags) no longer reaches past its own line's end to find one;
+  a tag left with nothing after it but a newline reports the existing
+  "requires a name" error instead of silently taking the next line's first
+  word as its name.
+
 ### Added
 
 - Tags a project declares itself, in the `[tags]` table of the config file. A

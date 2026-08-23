@@ -204,7 +204,10 @@ class DocComment:
         )
 
 
-_NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
+# Only [ \t], not \s: a name is looked for on the tag's own line, so a tag
+# left with nothing after it but a newline is one with no name at all, rather
+# than one that reaches past the line break and takes the next line's word.
+_NAME_RE = re.compile(r'[ \t]*(\S+)(.*)', re.DOTALL)
 # A name has to carry at least one identifier character; prose that merely
 # mentions a tag ('not tagged with @ingroup, so ...') would otherwise take the
 # punctuation that follows it as the name.

@@ -215,6 +215,14 @@ def test_tag_directly_followed_by_another_tag_is_an_error():
         parse(' @param @option QUIET q')
 
 
+def test_name_search_does_not_cross_a_line_break():
+    # A name is looked for on the tag's own line; one left with nothing on it
+    # must not reach past the newline and take the next line's first word,
+    # which would silently misparse a tag whose name was simply forgotten.
+    with pytest.raises(ParseError, match='@ingroup requires a name'):
+        parse(' @ingroup', ' Build targets is where this belongs.')
+
+
 def test_tag_mentioned_in_prose_is_kept_as_text_with_a_warning():
     doc = parse(' Not tagged with @ingroup, so it is ungrouped.')
     assert doc.group is None
