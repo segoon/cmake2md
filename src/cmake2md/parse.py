@@ -569,14 +569,12 @@ def cache_choices(file: File) -> dict[str, list[str]]:
     for _, name, arguments in command_calls(file):
         # set_property(CACHE <entry>... PROPERTY STRINGS <value>...)
         words = [argument_name(file, argument) for argument in arguments]
-        if name != 'set_property' or words[:1] != [CACHE]:
-            continue
-        if 'PROPERTY' not in words or words[words.index('PROPERTY') + 1 :][:1] != [
-            'STRINGS'
-        ]:
+        if name != 'set_property' or words[:1] != [CACHE] or 'PROPERTY' not in words:
             continue
 
         property_at = words.index('PROPERTY')
+        if words[property_at + 1 :][:1] != ['STRINGS']:
+            continue
         # A value may itself be one ';'-separated list.
         values = [
             word for value in words[property_at + 2 :] for word in value.split(';')

@@ -8,7 +8,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Redundancy and duplication
 
-* `parse.cache_choices` computes `words.index('PROPERTY')` twice.
 * The context entry is `dict[str, Any]` throughout `cli`, `rendering` and
   `serialize`, which is the `Any` the project's own rules rule out. A small
   dataclass with an `asdict()` would type the whole render path.
