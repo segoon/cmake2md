@@ -80,4 +80,5 @@ publish: release-check ## Upload to PyPI
 clean: ## Remove build artifacts and caches
 	rm -rf build dist .pytest_cache .ruff_cache .mypy_cache
 	rm -rf src/*.egg-info *.egg-info
+	rm -rf .venv/
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

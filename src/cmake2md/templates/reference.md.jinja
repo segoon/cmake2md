@@ -1,0 +1,93 @@
+{#
+  A whole reference document, so that a project needs no template of its own.
+
+  It lays itself out by @defgroup, and leaves out every group that has no
+  members, so a project that groups only its options still reads well. Copy it
+  into a --template-dir and edit it when this is not the layout you want.
+#}
+{% macro toc_entry(label, indent) -%}
+{{ indent }}* [{{ label }}](#{{ label | anchor }})
+{%- endmacro %}
+
+{% macro variable_table(entries) %}
+| Name | Description | Default |
+|------|-------------|---------|
+{%- for variable in entries %}
+| `{{ variable.name }}` | {{ variable.docstring | oneline | md_escape }}
+{{- ' (one of: ' ~ variable.choices | join(', ') ~ ')' if variable.choices }} |
+{{- ' ' }}`{{ variable.default | escape }}` |
+{%- endfor %}
+{% endmacro %}
+{#
+  Everything below reads these five: the symbols and options worth showing,
+  the groups that actually hold some, and whatever is in no group at all.
+#}
+{%- set shown = symbols | documented | public %}
+{%- set entries = variables | documented %}
+{%- set symbol_groups = groups | selectattr('name', 'in',
+        shown | map(attribute='group') | list) | list %}
+{%- set option_groups = groups | selectattr('name', 'in',
+        entries | map(attribute='group') | list) | list %}
+{#
+  Anything whose group nothing defines is loose, not lost: a group name with
+  no @defgroup behind it must not make a symbol disappear from the document.
+#}
+{%- set symbol_group_names = symbol_groups | map(attribute='name') | list %}
+{%- set option_group_names = option_groups | map(attribute='name') | list %}
+{%- set loose_symbols = shown | rejectattr('group', 'in', symbol_group_names)
+                              | list %}
+{%- set loose_entries = entries | rejectattr('group', 'in', option_group_names)
+                                | list %}
+{%- for file in files %}
+# {{ file.doc.brief or 'Reference' }}
+
+{{ file.doc.description }}
+{% else %}
+# Reference
+{% endfor %}
+
+## Contents
+{% for group in symbol_groups %}
+{{ toc_entry(group.title, '') }}
+{%- for symbol in shown | only_group(group.name) %}
+{{ toc_entry(symbol.name, '  ') }}
+{%- endfor %}
+{%- endfor %}
+{%- if loose_symbols %}
+{{ toc_entry('Functions and macros', '') if symbol_groups }}
+{%- for symbol in loose_symbols %}
+{{ toc_entry(symbol.name, '  ' if symbol_groups else '') }}
+{%- endfor %}
+{%- endif %}
+{%- if entries %}
+{{ toc_entry('Build options', '') }}
+{%- for group in option_groups %}
+{{ toc_entry(group.title, '  ') }}
+{%- endfor %}
+{%- endif %}
+{% for group in symbol_groups %}
+## {{ group.title }}
+
+{{ group.description }}
+
+{{ shown | only_group(group.name) | render }}
+{% endfor %}
+{%- if loose_symbols %}
+{% if symbol_groups %}
+## Functions and macros
+{% endif %}
+{{ loose_symbols | render }}
+{%- endif %}
+{%- if entries %}
+## Build options
+{% for group in option_groups %}
+### {{ group.title }}
+
+{{ group.description }}
+{{ variable_table(entries | only_group(group.name)) }}
+{% endfor %}
+{%- if loose_entries %}
+{% if option_groups %}### Other{% endif %}
+{{ variable_table(loose_entries) }}
+{%- endif %}
+{%- endif %}

@@ -10,11 +10,20 @@ import jinja2
 
 from .errors import UsageError
 
+#: Markers that delimit the generated part of a file written with --inject.
+INJECT_BEGIN = '<!-- BEGIN_CMAKE2MD -->'
+INJECT_END = '<!-- END_CMAKE2MD -->'
+
 #: Name of the template used to render each function into ``symbol.pretty``.
 #: Shadowing this file from a `--template-dir` overrides the built-in one.
 FUNCTION_TEMPLATE_NAME = 'function.md.jinja'
 
-_FENCE_RE = re.compile(r'^```.*?^```', re.MULTILINE | re.DOTALL)
+#: A fenced code block: ``` optionally followed by a language name, then the
+#: body, then a closing ```. Named groups, so `checks.cmake_snippets` can pull
+#: the language and body apart while this module only needs the whole span.
+FENCE_RE = re.compile(
+    r'^```(?P<lang>\w*)[ \t]*\n(?P<body>.*?)^```', re.MULTILINE | re.DOTALL
+)
 
 #: One entry of the `symbols` or `commands` list a template is rendered with,
 #: as built by `cli.enrich`.
@@ -50,6 +59,27 @@ def render(collection: Iterable[Item]) -> str:
     return ''.join(item['pretty'] + '\n' for item in collection)
 
 
+def anchor(name: str) -> str:
+    """The anchor a Markdown heading holding `name` gets.
+
+    The rule is the one GitHub and most Markdown renderers use: lowercase,
+    spaces to hyphens, everything else that is not a word character dropped.
+    """
+    return re.sub(r'[^\w-]', '', name.strip().lower().replace(' ', '-'))
+
+
+def symbol_link(name: str, collection: Iterable[Item]) -> str:
+    """Link `name` to its own section, if it is one of `collection`.
+
+    A name that nothing in the document defines is left as it was written:
+    a cross-reference to another project's function is still worth printing.
+    """
+    target = name.strip().removesuffix('()')
+    if any(item['name'] == target for item in collection):
+        return f'[{target}](#{anchor(target)})'
+    return name
+
+
 def only_command(collection: Iterable[Item], name: str) -> list[Item]:
     return [item for item in collection if item['name'] == name]
 
@@ -63,6 +93,15 @@ def documented(collection: Iterable[Item]) -> list[Item]:
     return [item for item in collection if any(c.strip() for c in item['comments'])]
 
 
+def public(collection: Iterable[Item]) -> list[Item]:
+    """Drop the entries their author marked @internal."""
+    return [
+        item
+        for item in collection
+        if not (item.get('doc') is not None and item['doc'].internal)
+    ]
+
+
 FILTERS = {
     'unquote': unquote,
     'escape': escape,
@@ -71,7 +110,10 @@ FILTERS = {
     'only_group': only_group,
     'only_command': only_command,
     'documented': documented,
+    'public': public,
     'render': render,
+    'anchor': anchor,
+    'symbol_link': symbol_link,
 }
 
 
@@ -88,7 +130,7 @@ def collapse_blank_lines(text: str) -> str:
 
     out = []
     pos = 0
-    for m in _FENCE_RE.finditer(text):
+    for m in FENCE_RE.finditer(text):
         out.append(squeeze(text[pos : m.start()]))
         out.append(m.group())
         pos = m.end()
@@ -151,3 +193,26 @@ def render_document(template: jinja2.Template, context: dict[str, Any]) -> str:
     # Whatever whitespace the template's control blocks leave at either end,
     # a document ends with exactly one newline and no leading blank lines.
     return collapse_blank_lines(template.render(context)).strip() + '\n'
+
+
+def inject(existing: str, content: str, path: str) -> str:
+    """Put `content` between the markers in `existing`, keeping the rest.
+
+    This is how documentation lives inside a hand-written README instead of
+    in a file of its own: the prose around the markers is the author's, and
+    only what is between them is ours to replace.
+    """
+    begin = existing.find(INJECT_BEGIN)
+    end = existing.find(INJECT_END)
+    if begin == -1 or end == -1:
+        raise UsageError(
+            f'{path} has no place to inject into; it needs a line saying '
+            f'{INJECT_BEGIN} and a later one saying {INJECT_END}'
+        )
+    if end < begin:
+        raise UsageError(
+            f'{path} has {INJECT_END} before {INJECT_BEGIN}, so there is '
+            'nothing between them'
+        )
+    head = existing[: begin + len(INJECT_BEGIN)]
+    return f'{head}\n{content.strip()}\n\n{existing[end:]}'

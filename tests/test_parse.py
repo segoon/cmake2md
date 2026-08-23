@@ -58,6 +58,15 @@ def test_comment_block_without_a_common_indent_is_left_alone(tmp_path):
     assert parse.extract_symbols(file)[0].comments == ['no space', ' spaced']
 
 
+def test_a_doubled_hash_does_not_leave_a_stray_one(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '## Adds a thing.\nfunction(f)\nendfunction()\n', encoding='utf-8'
+    )
+    file = parse.parse_file(source)
+    assert parse.extract_symbols(file)[0].comments == ['Adds a thing.']
+
+
 def test_blank_line_terminates_a_comment_block(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(
@@ -142,6 +151,42 @@ def test_location_points_at_a_line_inside_the_comment(tmp_path):
     assert symbol.location_at(0) == symbol.location
 
 
+def test_extract_blocks_finds_only_unattached_comments(parsed):
+    blocks = parse.extract_blocks(
+        parsed(
+            '# standalone, separated by a blank line\n'
+            '\n'
+            '# attached to the option below\n'
+            'option(FOO "d" ON)\n'
+            '\n'
+            '# attached to the function below\n'
+            'function(f)\n'
+            'endfunction()\n'
+            '\n'
+            '# standalone at the end of the file\n'
+        )
+    )
+    assert [b.comments[0].strip() for b in blocks] == [
+        'standalone, separated by a blank line',
+        'standalone at the end of the file',
+    ]
+
+
+def test_a_standalone_block_carries_its_line(parsed):
+    block = parse.extract_blocks(parsed('set(A 1)\n\n# a note\n# on two lines\n'))[0]
+    # Dedented as one block, like any other comment.
+    assert block.comments == ['a note', 'on two lines']
+    assert block.line == 3
+    assert block.location.endswith(':3: comment block')
+
+
+def test_blocks_inside_a_body_are_found_too(parsed):
+    blocks = parse.extract_blocks(
+        parsed('function(f)\n    set(A 1)\n\n    # standalone inside\nendfunction()\n')
+    )
+    assert [b.comments[0].strip() for b in blocks] == ['standalone inside']
+
+
 def test_missing_file_raises_a_friendly_error(tmp_path):
     with pytest.raises(Cmake2mdError, match='cannot read'):
         parse.parse_file(tmp_path / 'nope.txt')
@@ -154,3 +199,68 @@ def test_non_utf8_file_is_reported_with_its_line(tmp_path):
     )
     with pytest.raises(Cmake2mdError, match='CMakeLists.txt:2: not valid UTF-8'):
         parse.parse_file(source)
+
+
+def test_a_bracket_comment_documents_the_symbol_below_it(parsed):
+    symbol = parse.extract_symbols(
+        parsed(
+            '#[[ Adds a library.\n'
+            '\n'
+            '@arg NAME the target name\n'
+            ']]\n'
+            'function(add_lib)\n'
+            'endfunction()\n'
+        )
+    )[0]
+    assert symbol.comments[0] == ' Adds a library.'
+    assert '@arg NAME the target name' in symbol.comments
+
+
+def test_a_bracket_comment_with_crlf_line_endings_has_no_stray_carriage_return(
+    parsed,
+):
+    # A source file with Windows line endings is not unusual to encounter
+    # regardless of which OS cmake2md itself runs on; split('\n') used to
+    # leave a trailing '\r' on every line but the last.
+    symbol = parse.extract_symbols(
+        parsed(
+            '#[[ Adds a library.\r\n'
+            '\r\n'
+            '@arg NAME the target name\r\n'
+            ']]\r\n'
+            'function(add_lib)\r\n'
+            'endfunction()\r\n'
+        )
+    )[0]
+    assert symbol.comments[0] == ' Adds a library.'
+    assert '@arg NAME the target name' in symbol.comments
+    assert not any('\r' in line for line in symbol.comments)
+
+
+def test_cmakes_own_rst_bracket_style_is_understood(parsed):
+    symbol = parse.extract_symbols(
+        parsed(
+            '#[==[.rst:\n'
+            "Documented the way CMake's own modules are.\n"
+            '#]==]\n'
+            'function(f)\n'
+            'endfunction()\n'
+        )
+    )[0]
+    # The '.rst:' marker and the '#' of the closing '#]==]' are punctuation.
+    assert symbol.comments == ["Documented the way CMake's own modules are."]
+
+
+def test_a_bracket_comment_may_stand_alone(parsed):
+    block = parse.extract_blocks(
+        parsed('#[[\n@defgroup build Build targets\n]]\n\nset(A 1)\n')
+    )[0]
+    assert block.comments == ['@defgroup build Build targets']
+
+
+def test_a_bracket_comment_documents_a_command_too(parsed):
+    command = parse.extract_variables(
+        parsed('#[[ @ingroup build ]]\noption(FOO "d" ON)\n')
+    )[0]
+    # Dedented as one block, like any other comment.
+    assert command.comments == ['@ingroup build ']

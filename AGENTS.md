@@ -6,8 +6,9 @@ and uses jinja templates to generate final documentation.
 
 # Core documentation
 
-- @README.md - the main user documentation.
-- @TODO.md - the plans.
+* @VISION.md - the core product vision, read it first.
+* @README.md - the main user documentation.
+* @TODO.md - the plans.
 
 # Development
 
@@ -23,6 +24,7 @@ Python 3.10, mypy, ruff, pyproject.toml.
 
 * Use annotations.
 * Do not use `Any`, always set the strict direct type.
+* Avoid monkeypatch, use DI instead
 
 ## Generic
 
@@ -41,7 +43,7 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * When fixing a bug, search for similar bugs in the nearby code.
 * When found a bug, elaborate whether it is possible to redesign the system to make such bugs impossible
 
-- DRY, KISS, SOLID.
+* DRY, KISS, SOLID.
 * Prefer SRP, avoid god objects.
 * Use OOP where appropriate.
 
@@ -55,4 +57,6 @@ Python 3.10, mypy, ruff, pyproject.toml.
 ## Runtime
 
 * Use venv at .venv
-* test with `make check`
+* Test with `make check`
+* Run `make check` before `git commit`
+* Do not write 'Co-Authored-By' in commit description

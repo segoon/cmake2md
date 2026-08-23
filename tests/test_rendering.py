@@ -54,6 +54,23 @@ def test_documented_keeps_only_commented_items():
     assert rendering.documented(items) == [items[0]]
 
 
+def test_public_drops_internal_entries():
+    from cmake2md import doc_parser
+    from cmake2md import tag_lexer
+
+    def doc(*lines):
+        return doc_parser.parse(tag_lexer.tokenize(list(lines)))
+
+    items: list[rendering.Item] = [
+        {'name': 'a', 'doc': doc(' public')},
+        {'name': 'b', 'doc': doc(' private', ' @internal')},
+        {'name': 'c'},
+    ]
+    # An entry with no parsed comment at all is left in: only an explicit
+    # @internal takes something out.
+    assert rendering.public(items) == [items[0], items[2]]
+
+
 def test_collapse_blank_lines():
     assert rendering.collapse_blank_lines('a\n\n\n\n\nb') == 'a\n\n\nb'
     assert rendering.collapse_blank_lines('a\n\nb') == 'a\n\nb'
@@ -106,3 +123,23 @@ def test_load_template_reports_where_it_looked(tmp_path):
     assert 'template not found: nosuch.md.jinja' in message
     assert str(tmp_path) in message
     assert rendering.FUNCTION_TEMPLATE_NAME in message
+
+
+def test_anchor_follows_the_markdown_heading_rule():
+    assert rendering.anchor('example_add_library') == 'example_add_library'
+    assert rendering.anchor('Build targets') == 'build-targets'
+    assert rendering.anchor('  What (now)?  ') == 'what-now'
+
+
+def test_symbol_link_only_links_what_the_document_defines():
+    symbols: list[rendering.Item] = [{'name': 'example_add_library'}]
+    assert (
+        rendering.symbol_link('example_add_library', symbols)
+        == '[example_add_library](#example_add_library)'
+    )
+    # Written with the parentheses a reader would say it with.
+    assert (
+        rendering.symbol_link('example_add_library()', symbols)
+        == '[example_add_library](#example_add_library)'
+    )
+    assert rendering.symbol_link('other_project_fn', symbols) == 'other_project_fn'

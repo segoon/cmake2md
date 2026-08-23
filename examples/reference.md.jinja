@@ -22,13 +22,13 @@
 
 ## Functions
 
-{% for symbol in symbols | documented if symbol.type_ == 'function' %}
+{% for symbol in symbols | documented | public if symbol.type_ == 'function' %}
 {{ symbol.pretty }}
 {% endfor %}
 
 ## Macros
 
-{% for symbol in symbols | documented if symbol.type_ == 'macro' %}
+{% for symbol in symbols | documented | public if symbol.type_ == 'macro' %}
 {{ symbol.pretty }}
 {% endfor %}
 
@@ -37,15 +37,10 @@
 ## General
 
 {{ table(variables | only_group(None), 'Option') }}
+{% for group in groups %}
+## {{ group.title }}
 
-## Build targets
+{{ group.description }}
 
-{{ table(variables | only_group('build'), 'Option') }}
-
-## Compilation modes
-
-{{ table(variables | only_group('compilation'), 'Option') }}
-
-## Paths
-
-{{ table(variables | only_group('paths'), 'Variable') }}
+{{ table(variables | only_group(group.name), 'Option') }}
+{% endfor %}

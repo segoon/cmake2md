@@ -81,3 +81,16 @@ def test_variables_are_located_for_diagnostics(variables_of):
     option, cached = variables_of('option(A "d" ON)\nset(B "v" CACHE STRING "d")\n')
     assert option.location.endswith(':1: option A')
     assert cached.location.endswith(':2: cache variable B')
+
+
+def test_mark_as_advanced_flags_the_entry(variables_of):
+    plain, advanced = variables_of(
+        'option(PLAIN "d" ON)\noption(DEEP "d" ON)\nmark_as_advanced(DEEP)\n'
+    )
+    assert not plain.advanced
+    assert advanced.advanced
+
+
+def test_mark_as_advanced_keywords_are_not_names(variables_of):
+    variable = variables_of('option(DEEP "d" ON)\nmark_as_advanced(FORCE DEEP)\n')[0]
+    assert variable.advanced

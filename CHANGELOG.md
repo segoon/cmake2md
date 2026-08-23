@@ -2,8 +2,125 @@
 
 ## Unreleased
 
+### Fixed
+
+- A tag that takes a name (`@ingroup`, `@type`, `@default`, `@defgroup`,
+  the parameter tags) no longer reaches past its own line's end to find one;
+  a tag left with nothing after it but a newline reports the existing
+  "requires a name" error instead of silently taking the next line's first
+  word as its name.
+- `output = "-"` and `json = "-"` in `cmake2md.toml`, which mean "write to
+  stdout", are no longer resolved against the config file's directory into a
+  file literally called `-`.
+- A diagnostic about an `option()` or `set(... CACHE ...)` call is no longer
+  printed twice, once as a `Command` and once as the `Variable` it also is;
+  it is reported once, under the `Variable`'s own name.
+- A source file reached twice — a directory and an explicit path both
+  matching it, or the same argument given twice — is read once instead of
+  documenting every symbol in it twice over.
+- A second `@brief` or `@ingroup` in one doc comment is a warning, and the
+  first is kept, instead of silently overwriting it. A `@defgroup` naming a
+  group a previous one already defined is likewise a warning, and only the
+  first defines the group; previously the section was rendered twice.
+- `@file` above a `function()`, `macro()`, variable or command call is now
+  reported, like a `@defgroup` in the same place already was: it documents a
+  comment block as a whole, and would previously do nothing without a word.
+- `@see` names another symbol through `symbol_link`, which used to resolve
+  only when a template rendered `function.md.jinja` as a whole document. The
+  built-in `reference.md.jinja`, and any template reaching a symbol through
+  `symbol.pretty`, now link it the same way.
+- An unwritable output directory or an unreadable `.cmake2mdignore` is
+  reported as a sentence naming the file, like every other I/O problem
+  already was, instead of a Python traceback.
+- `--check`, `--inject` and `--require-docs` accept `--no-check`,
+  `--no-inject` and `--no-require-docs`, like `--strict` already accepted
+  `--no-strict`, so a project that records one of them as `true` in
+  `cmake2md.toml` can still turn it off for one run.
+- `--json` no longer needs a `--template`/`--output` pair alongside it; a
+  consumer that wants only the parsed model no longer has to invent a
+  throwaway one.
+- A symbol documented with no parameter at all — a `@brief` alone, say — is
+  now checked against its own code from the start, instead of only once its
+  author documented at least one parameter of it. A function whose comment
+  names none of the keywords `cmake_parse_arguments()` accepts used to be
+  compared against nothing at all.
+- A tag rendered under a label — `@note`, `@example`, a project's own — left
+  with nothing after it is a warning, since it would otherwise render as a
+  bare `> **Note:**`. `@defgroup` with no title is unaffected: an empty one
+  is not a mistake, since a group with no title reads by its own name.
+- A declared tag with no `label` of its own is labelled after itself with its
+  inner capitals kept, so `@seeAlso` reads `SeeAlso:` rather than `Seealso:`.
+- An `@ingroup` inside a standalone comment block is now checked against the
+  groups `@defgroup` actually defines, like one on a function, macro,
+  variable or command already was.
+- A `##` line comment no longer keeps a stray `#` in its text; CMake attaches
+  no meaning to how many `#` a comment line opens with, so a Doxygen-style
+  `##` is stripped the same as a lone `#`.
+
 ### Added
 
+- Tags a project declares itself, in the `[tags]` table of the config file. A
+  declared tag opens a section like `@note` does — `text`, `takes_name` and
+  `label` say how — so it is recognised rather than reported,
+  reachable as `doc.of_kind('author')`, and rendered by the built-in template
+  under its label without anyone writing a template.
+- `cmake/cmake2md.cmake`, a module whose `cmake2md_generate(TARGET docs)` adds
+  two build targets that run cmake2md — one that writes the documentation and
+  a `-check` companion that verifies it — so a CMake project can document
+  itself from its own build. `TARGET` is all it takes: the rest is in
+  `cmake2md.toml`, and a target that repeated any of it would be a second
+  place to keep in step. It is written with cmake2md's own tags, and the test
+  suite holds it to `--strict`.
+- A config file: the nearest `cmake2md.toml` at or above the working
+  directory, or any TOML file named with `--config`, so a CI step is
+  `cmake2md` and nothing else. A relative path in it is relative to the file,
+  so the run means the same thing from a build directory as from the project
+  root. The command line always wins over it.
+- Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
+  including CMake's own `#[==[.rst:` house style. A symbol documented that way
+  used to read as undocumented, silently.
+- `mark_as_advanced()` sets `advanced` on a variable, which is CMake's own way
+  of saying an entry is not one an ordinary user reaches for.
+- `--inject` writes between the `<!-- BEGIN_CMAKE2MD -->` and
+  `<!-- END_CMAKE2MD -->` markers of an existing file, so generated
+  documentation can live inside a hand-written README. It composes with
+  `--check`.
+- A second built-in template, `reference.md.jinja`: a whole document with a
+  table of contents, laid out by `@defgroup`, so a project needs no template
+  of its own.
+- A pre-commit hook (`cmake2md-check` and `cmake2md`) and a GitHub Action.
+- `--json OUTPUT` writes the parsed model as JSON, under a `schema_version`
+  that is bumped only when a field disappears or changes meaning.
+- `--require-docs` fails the run on a public `function()` or `macro()` with no
+  doc comment, like rustdoc's `missing_docs`. A leading `_` and `@internal`
+  both mean private.
+- `--exclude PATTERN`, repeatable, and a `.cmake2mdignore` file listing more
+  of the same.
+- `@type` and `@default` refine the parameter written above them, as
+  `@required` already did, and the built-in template prints them.
+- `@file`, in a comment block of its own, marks that block as documenting the
+  file; those blocks arrive as the `files` list.
+- `anchor` and `symbol_link` filters, so a `@see` naming a symbol the document
+  defines becomes a link to it and one naming anything else stays prose. The
+  built-in template links them.
+- `@defgroup NAME <title>`, written in a comment block of its own, gives a
+  group a title, a description and a position in the document. Templates get
+  them as `groups`, so `examples/reference.md.jinja` no longer names a single
+  group of its own. An `@ingroup` naming a group that no `@defgroup` defines
+  is reported, once any group is defined at all.
+- Comment blocks that document nothing are extracted, which is where a group
+  is defined and where anything said about the file as a whole will go.
+- Eight tags: `@brief`, `@example`, `@note`, `@warning`, `@since`, `@todo`
+  and `@see`. A prose tag holds one paragraph and ends at a blank line, as
+  Doxygen's does; `@example` holds a block, so the blank lines inside a sample
+  survive. They arrive as `doc.brief` and `doc.sections`, which
+  `doc.of_kind('note')` selects from, and the built-in template renders them.
+- `@example` is checked to parse as CMake — the closest a build language gets
+  to rustdoc's doc tests. A sample in a fence naming another language is left
+  alone.
+- `@internal` marks a symbol as not part of the public interface, and the new
+  `public` filter drops those. It gives a private helper a way to be hidden
+  deliberately rather than by the accident of having no comment.
 - `variables`, a third list templates are rendered with: every cache entry a
   user can set, from `option()` and from `set(... CACHE ...)`, parsed into
   `name`, `type_`, `default`, `docstring` and `choices`. A template no longer
@@ -27,10 +144,32 @@
   the variable's name, which the code cannot reveal.
 - Each parameter records the line of the tag that introduced it, as `.line`.
 
+### Dependencies
+
+- `tomli`, to read the config file. The standard library has the same parser
+  as `tomllib` from 3.11 on, but taking whichever is present would mean a
+  version check and a branch that only the oldest supported interpreter runs.
+
 ### Changed
 
+- The tag vocabulary is data: every tag declares what it attaches to — a
+  parameter, a section, a field of the comment, a field of the parameter above
+  it — and the parser names no tag of its own. `doc.sections` entries carry a
+  `.label` as a result.
+- `@return` is now `@set_parent_scope`, which is what it documents: CMake's
+  `return()` does something else entirely.
+- `--check` prints a diff of what differs instead of only reporting that
+  something does.
 - `--strict` now promotes every documentation warning to an error, not only a
-  doubtful `@tag`.
+  doubtful `@tag`, and it is what a run does by default: a documentation
+  problem nobody is made to look at is a documentation problem nobody fixes.
+  `--no-strict`, or `strict = false` in the config file, reports them as
+  warnings and carries on.
+- A flag turned off on the command line now beats the config file, which used
+  to win over it because "off" and "unsaid" were the same value.
+- A config setting of the wrong type is refused rather than taken as it comes.
+  `strict = "no"` used to turn strict *on*, every non-empty string being true;
+  now it says so. The lists were already checked; the rest were not.
 
 ## 0.1.0 (2026-08-22)
 

@@ -34,6 +34,10 @@ dependencies = [
     # Must be ABI-compatible with the tree-sitter core above; a mismatch
     # surfaces as "Incompatible Language version" at import time.
     "tree-sitter-cmake>=0.5",
+    # The TOML parser of the config file.  Used on every version rather than
+    # only below 3.11, where tomllib is the same parser under another name:
+    # one code path beats a version check and a branch almost nobody runs.
+    "tomli>=2.0",
 ]
 
 [project.optional-dependencies]

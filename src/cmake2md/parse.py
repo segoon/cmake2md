@@ -3,6 +3,7 @@
 import abc
 import dataclasses
 import pathlib
+import re
 import textwrap
 from collections.abc import Iterator
 from collections.abc import Sequence
@@ -92,7 +93,8 @@ class Documented(abc.ABC):
         Diagnostics about a tag know the line the tag is on, which is inside
         the comment block and so above `self.line`.
         """
-        return f'{self.filepath}:{line or self.line}: {self.kind} {self.name}'
+        # rstrip: a comment block has no name to print after its kind.
+        return f'{self.filepath}:{line or self.line}: {self.kind} {self.name}'.rstrip()
 
 
 @dataclasses.dataclass
@@ -135,10 +137,26 @@ class Variable(Documented):
     docstring: str
     #: The values set_property(CACHE ... PROPERTY STRINGS) restricts it to.
     choices: list[str] | None = None
+    #: Whether mark_as_advanced() hides it from the ordinary user, which is
+    #: CMake's own way of saying an entry is not one to reach for.
+    advanced: bool = False
 
     @property
     def kind(self) -> str:
         return 'option' if self.command == 'option' else 'cache variable'
+
+
+@dataclasses.dataclass
+class Block(Documented):
+    """A comment block that documents nothing but itself.
+
+    It is where a group is defined, and where anything said about the file as
+    a whole belongs.
+    """
+
+    @property
+    def kind(self) -> str:
+        return 'comment block'
 
 
 @dataclasses.dataclass
@@ -148,34 +166,120 @@ class CommentBlock:
     line: int
 
 
+#: '#[[', '#[=[', '#[==[' … and the ']]', ']=]' that closes each of them.
+BRACKET_OPEN_RE = re.compile(r'^#\[(=*)\[')
+#: CMake's own house style marks a documentation block with '.rst:' right
+#: after the opening bracket; it says what the text is, not part of the text.
+RST_MARKER = '.rst:'
+#: The comment node types a doc comment can be written as.
+COMMENT_TYPES = frozenset({'line_comment', 'bracket_comment'})
+
+
+def comment_text(file: File, node: Node) -> list[str]:
+    """The lines a comment node contributes, without its markers.
+
+    A '#' line comment gives one line; a bracket comment gives the lines
+    between its brackets, so that both forms reach the tag parser as the same
+    kind of thing.
+    """
+    text = file.get_text(node)
+    if node.type != 'bracket_comment':
+        # CMake attaches no meaning to how many '#' a comment line opens
+        # with; a Doxygen-style '##' is exactly as common as a lone '#', and
+        # stripping only one would leave the other as a stray character of
+        # content.
+        return [text.lstrip('#')]
+
+    opening = BRACKET_OPEN_RE.match(text)
+    if opening is None:
+        return [text]
+    body = text[opening.end() :].removeprefix(RST_MARKER)
+    body = body.removesuffix(']' + '=' * len(opening.group(1)) + ']')
+    # A bracket comment usually opens and closes on lines of its own, and
+    # those lines are punctuation rather than content.  CMake's house style
+    # closes with '#]==]', whose '#' is inside the comment but is plainly
+    # part of the marker.  splitlines() rather than split('\n'): the source
+    # may have CRLF line endings, and split('\n') would leave a stray '\r' on
+    # every line but the last.
+    lines = body.splitlines()
+    if lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and lines[-1].strip() in ('', '#'):
+        lines.pop()
+    return lines
+
+
+def newlines_between(file: File, first: Node, second: Node) -> int:
+    return file.content.count(b'\n', first.end_byte, second.start_byte)
+
+
+def comment_block(file: File, comments: Sequence[Node]) -> CommentBlock:
+    """Build a block out of consecutive comment nodes.
+
+    The run is dedented as one block rather than line by line, which keeps
+    indentation *within* the comment — nested lists, code blocks — intact.
+    """
+    if not comments:
+        return CommentBlock(lines=[], line=0)
+    text = '\n'.join(
+        line for comment in comments for line in comment_text(file, comment)
+    )
+    return CommentBlock(
+        lines=textwrap.dedent(text).split('\n'),
+        line=comments[0].start_point.row + 1,
+    )
+
+
 def get_comments(file: File, node: Node) -> CommentBlock:
     """Collect the run of comment lines immediately above `node`.
 
     A blank line ends the run, so an unrelated comment further up the file is
-    not absorbed into this symbol's documentation.  The run is dedented as one
-    block rather than line by line, which keeps indentation *within* the
-    comment — nested lists, code blocks — intact.
+    not absorbed into this symbol's documentation.
     """
     comments = []
 
     current = node
     prev = current.prev_sibling
-    while prev is not None and prev.type == 'line_comment':
-        gap = file.content[prev.end_byte : current.start_byte]
-        if gap.count(b'\n') > 1:
+    while prev is not None and prev.type in COMMENT_TYPES:
+        if newlines_between(file, prev, current) > 1:
             break
-        comments.append(file.get_text(prev).removeprefix('#'))
+        comments.append(prev)
         current = prev
         prev = current.prev_sibling
+        # A bracket comment is a block in itself; nothing above it joins on.
+        if comments[-1].type == 'bracket_comment':
+            break
 
-    if not comments:
-        return CommentBlock(lines=[], line=0)
     comments.reverse()
-    # `current` walked up to the topmost comment of the run.
-    return CommentBlock(
-        lines=textwrap.dedent('\n'.join(comments)).split('\n'),
-        line=current.start_point.row + 1,
-    )
+    return comment_block(file, comments)
+
+
+def standalone_blocks(file: File, node: Node) -> Iterator[CommentBlock]:
+    """The comment blocks below `node` that document nothing.
+
+    A block that sits directly above a definition or a call belongs to it and
+    `get_comments` has it already; one separated by a blank line, or with
+    nothing after it at all, stands on its own and can only be talking about
+    the file or about a group.
+    """
+    run: list[Node] = []
+    for child in node.children:
+        if child.type in COMMENT_TYPES:
+            if run and newlines_between(file, run[-1], child) > 1:
+                yield comment_block(file, run)
+                run = []
+            run.append(child)
+            continue
+
+        if run:
+            attached = newlines_between(file, run[-1], child) <= 1
+            if not attached:
+                yield comment_block(file, run)
+            run = []
+        yield from standalone_blocks(file, child)
+
+    if run:
+        yield comment_block(file, run)
 
 
 def argument_name(file: File, argument: Node) -> str:
@@ -471,14 +575,12 @@ def cache_choices(file: File) -> dict[str, list[str]]:
     for _, name, arguments in command_calls(file):
         # set_property(CACHE <entry>... PROPERTY STRINGS <value>...)
         words = [argument_name(file, argument) for argument in arguments]
-        if name != 'set_property' or words[:1] != [CACHE]:
-            continue
-        if 'PROPERTY' not in words or words[words.index('PROPERTY') + 1 :][:1] != [
-            'STRINGS'
-        ]:
+        if name != 'set_property' or words[:1] != [CACHE] or 'PROPERTY' not in words:
             continue
 
         property_at = words.index('PROPERTY')
+        if words[property_at + 1 :][:1] != ['STRINGS']:
+            continue
         # A value may itself be one ';'-separated list.
         values = [
             word for value in words[property_at + 2 :] for word in value.split(';')
@@ -488,10 +590,31 @@ def cache_choices(file: File) -> dict[str, list[str]]:
     return choices
 
 
+def advanced_variables(file: File) -> set[str]:
+    """The entries mark_as_advanced() hides from the ordinary user.
+
+    Its FORCE and CLEAR keywords say how hard to insist, not what to mark, so
+    they are not names.
+    """
+    advanced: set[str] = set()
+    for _, name, arguments in command_calls(file):
+        if name != 'mark_as_advanced':
+            continue
+        advanced.update(
+            word
+            for argument in arguments
+            if not contains_variable_ref(argument)
+            for word in [argument_name(file, argument)]
+            if word not in ('FORCE', 'CLEAR')
+        )
+    return advanced
+
+
 def extract_variables(file: File) -> list[Variable]:
     """Extract the cache entries a user can set, documented or not."""
     variables = []
     choices = cache_choices(file)
+    advanced = advanced_variables(file)
 
     for command, name, arguments in command_calls(file):
         if name not in ('option', 'set') or not arguments:
@@ -519,6 +642,7 @@ def extract_variables(file: File) -> list[Variable]:
                 default=default,
                 docstring=docstring,
                 choices=choices.get(entry),
+                advanced=entry in advanced,
                 comments=block.lines,
                 comments_line=block.line,
                 filepath=file.filepath,
@@ -526,6 +650,21 @@ def extract_variables(file: File) -> list[Variable]:
             )
         )
     return variables
+
+
+def extract_blocks(file: File) -> list[Block]:
+    """Extract the comment blocks that document nothing but themselves."""
+    return [
+        Block(
+            name='',
+            comments=block.lines,
+            comments_line=block.line,
+            filepath=file.filepath,
+            line=block.line,
+        )
+        for block in standalone_blocks(file, file.tree.root_node)
+        if any(line.strip() for line in block.lines)
+    ]
 
 
 def parse_file(path: str | pathlib.Path) -> File:

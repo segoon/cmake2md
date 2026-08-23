@@ -61,21 +61,151 @@ def test_params_are_split_by_kind_and_keep_order():
 
 
 def test_return_documents_an_output_variable():
-    doc = parse(' @return RESULT the computed value')
+    doc = parse(' @set_parent_scope RESULT the computed value')
     assert doc.returns[0].kind == ParamKind.OutVar
     assert doc.returns[0].name == 'RESULT'
     assert doc.returns[0].description == 'the computed value'
 
 
+def test_brief_is_the_summary_and_ends_at_a_blank_line():
+    doc = parse(
+        ' @brief Adds a library.',
+        '',
+        ' The longer story, which is not part of the brief.',
+    )
+    assert doc.brief == 'Adds a library.'
+    assert doc.description == 'The longer story, which is not part of the brief.'
+
+
+def test_brief_keeps_prose_written_before_it():
+    doc = parse(' Leading prose.', ' @brief The summary.')
+    assert doc.brief == 'The summary.'
+    assert doc.description == 'Leading prose.'
+
+
+def test_prose_sections_are_collected_in_order():
+    doc = parse(
+        ' Adds a library.',
+        ' @note Call it early.',
+        ' @warning Not thread safe.',
+        ' @since 1.2',
+        ' @todo support OBJECT libraries',
+        ' @see example_add_test',
+    )
+    assert [(s.kind, s.text) for s in doc.sections] == [
+        ('note', 'Call it early.'),
+        ('warning', 'Not thread safe.'),
+        ('since', '1.2'),
+        ('todo', 'support OBJECT libraries'),
+        ('see', 'example_add_test'),
+    ]
+    assert doc.description == 'Adds a library.'
+
+
+def test_of_kind_selects_sections():
+    doc = parse(' @note One.', ' @warning Careful.', ' @note Two.')
+    assert [s.text for s in doc.of_kind('note')] == ['One.', 'Two.']
+    assert doc.of_kind('nosuch') == []
+
+
+def test_a_prose_section_ends_at_a_blank_line():
+    doc = parse(' @note Call it early.', '', ' Back to the description.')
+    assert doc.of_kind('note')[0].text == 'Call it early.'
+    assert doc.description == 'Back to the description.'
+
+
+def test_an_example_keeps_its_blank_lines():
+    doc = parse(
+        ' @example',
+        ' f(A)',
+        '',
+        ' g(B)',
+        ' @note And a note.',
+    )
+    assert doc.of_kind('example')[0].text == 'f(A)\n\n g(B)'
+    assert doc.of_kind('note')[0].text == 'And a note.'
+
+
+def test_a_section_does_not_swallow_the_parameters_that_follow():
+    doc = parse(' @note Careful.', ' @param NAME the name')
+    assert doc.of_kind('note')[0].text == 'Careful.'
+    assert [(p.name, p.description) for p in doc.params] == [('NAME', 'the name')]
+
+
+def test_internal_is_a_symbol_level_flag():
+    assert not parse(' A helper.').internal
+    doc = parse(' A helper.', ' @internal')
+    assert doc.internal
+    assert doc.description == 'A helper.'
+
+
+def test_sections_carry_the_line_they_are_on():
+    doc = doc_parser.parse(
+        tag_lexer.tokenize([' first line', ' @note here']), first_line=40
+    )
+    assert doc.of_kind('note')[0].line == 41
+
+
+def test_defgroup_takes_a_name_and_a_title():
+    doc = parse(
+        ' @defgroup build Build targets',
+        '',
+        ' What gets built, and what is left out.',
+    )
+    section = doc.of_kind('defgroup')[0]
+    assert section.name == 'build'
+    assert section.text == 'Build targets'
+    assert doc.description == 'What gets built, and what is left out.'
+
+
+def test_defgroup_without_a_title_keeps_an_empty_one():
+    doc = doc_parser.parse(tag_lexer.tokenize([' @defgroup build']))
+    assert doc.of_kind('defgroup')[0] == doc_parser.Section(
+        kind='defgroup', text='', name='build', line=1
+    )
+    # An empty title is not a mistake: collect_groups() falls back to the
+    # group's own name, unlike a tag that is rendered under a label.
+    assert doc.warnings == []
+
+
+def test_an_empty_prose_tag_is_a_warning():
+    doc = parse(' @note')
+    assert doc.of_kind('note')[0].text == ''
+    assert len(doc.warnings) == 1
+    assert doc.warnings[0].message == '@note has nothing after it'
+
+
+def test_an_empty_example_is_a_warning():
+    doc = parse(' @example')
+    assert doc.of_kind('example')[0].text == ''
+    assert len(doc.warnings) == 1
+    assert doc.warnings[0].message == '@example has nothing after it'
+
+
 def test_ingroup():
     doc = parse(' @ingroup compilation')
     assert doc.group == 'compilation'
+    assert doc.group_line == 1
 
 
 def test_ingroup_with_surrounding_description():
     doc = parse(' Build with sanitizers.', ' @ingroup compilation')
     assert doc.group == 'compilation'
     assert doc.description == 'Build with sanitizers.'
+
+
+def test_a_second_ingroup_is_a_warning_and_the_first_is_kept():
+    doc = parse(' @ingroup compilation', ' @ingroup build')
+    assert doc.group == 'compilation'
+    assert len(doc.warnings) == 1
+    assert '@ingroup is given more than once' in doc.warnings[0].message
+
+
+def test_a_second_brief_is_a_warning_and_the_first_is_kept():
+    doc = parse(' @brief One.', ' @brief Two.')
+    assert doc.brief == 'One.'
+    assert len(doc.warnings) == 1
+    assert '@brief is given more than once' in doc.warnings[0].message
 
 
 def test_multiline_param_description():
@@ -115,6 +245,14 @@ def test_missing_name_after_tag_is_an_error():
 def test_tag_directly_followed_by_another_tag_is_an_error():
     with pytest.raises(ParseError, match='@param requires a name'):
         parse(' @param @option QUIET q')
+
+
+def test_name_search_does_not_cross_a_line_break():
+    # A name is looked for on the tag's own line; one left with nothing on it
+    # must not reach past the newline and take the next line's first word,
+    # which would silently misparse a tag whose name was simply forgotten.
+    with pytest.raises(ParseError, match='@ingroup requires a name'):
+        parse(' @ingroup', ' Build targets is where this belongs.')
 
 
 def test_tag_mentioned_in_prose_is_kept_as_text_with_a_warning():
@@ -163,3 +301,70 @@ def test_warnings_carry_the_line_too():
         tag_lexer.tokenize([' first line', ' see @nosuchtag']), first_line=40
     )
     assert [w.line for w in doc.warnings] == [41]
+
+
+def test_type_and_default_refine_the_preceding_parameter():
+    doc = parse(' @param TIMEOUT @type seconds @default 30 before it is killed')
+    param = doc.params[0]
+    assert param.type_ == 'seconds'
+    assert param.default == '30'
+    assert param.description == 'before it is killed'
+
+
+def test_type_without_a_parameter_is_an_error():
+    with pytest.raises(ParseError, match='@type must follow'):
+        parse(' @type seconds')
+
+
+def test_default_without_a_parameter_is_an_error():
+    with pytest.raises(ParseError, match='@default must follow'):
+        parse(' @default 30')
+
+
+def test_file_marks_the_block_as_documenting_the_file():
+    assert not parse(' Just prose.').documents_file
+    doc = parse(' @file', ' @brief What this file is for.')
+    assert doc.documents_file
+    assert doc.brief == 'What this file is for.'
+
+
+CUSTOM = {
+    'author': doc_parser.TagSpec(
+        doc_parser.TagTarget.Section,
+        text=doc_parser.TagText.Paragraph,
+        label='Author:',
+    )
+}
+
+
+def parse_with(*lines, specs):
+    return doc_parser.parse(tag_lexer.tokenize(list(lines)), strict=True, specs=specs)
+
+
+def test_a_declared_tag_opens_a_section():
+    doc = parse_with(' @author Alice', specs=doc_parser.vocabulary(CUSTOM))
+    section = doc.of_kind('author')[0]
+    assert section.text == 'Alice'
+    assert section.label == 'Author:'
+
+
+def test_a_declared_tag_does_not_displace_the_builtin_ones():
+    doc = parse_with(
+        ' @brief Adds a thing.',
+        '',
+        ' @author Alice',
+        specs=doc_parser.vocabulary(CUSTOM),
+    )
+    assert doc.brief == 'Adds a thing.'
+    assert [section.kind for section in doc.sections] == ['author']
+
+
+def test_an_undeclared_tag_is_still_unknown():
+    with pytest.raises(ParseError, match='unknown tag @author'):
+        parse_with(' @author Alice', specs=doc_parser.TAG_SPECS)
+
+
+def test_the_summary_is_not_one_of_the_sections():
+    doc = parse(' @brief Adds a thing.')
+    assert doc.brief == 'Adds a thing.'
+    assert doc.sections == []

@@ -97,15 +97,50 @@ endfunction()
 
 
 def test_a_documented_output_variable_the_code_does_not_set_is_reported(messages):
-    assert messages(RETURNING.format(tags='@return RESULT r\n# @return MISSING m')) == [
-        'MISSING is documented as @return but compute does not set it'
-    ]
+    assert messages(
+        RETURNING.format(
+            tags='@set_parent_scope RESULT r\n# @set_parent_scope MISSING m'
+        )
+    ) == ['MISSING is documented as @set_parent_scope but compute does not set it']
 
 
 def test_an_undocumented_output_variable_is_reported(messages):
     assert messages(RETURNING.format(tags='@arg NAME n')) == [
-        'compute sets RESULT but it is not documented; add @return RESULT'
+        'compute sets RESULT but it is not documented; add @set_parent_scope RESULT'
     ]
+
+
+EXAMPLE = '# Adds a thing.\n#\n# @example\n{body}function(f)\nendfunction()\n'
+
+
+def example(*lines):
+    return EXAMPLE.format(body=''.join(f'# {line}\n' for line in lines))
+
+
+def test_an_example_that_parses_as_cmake_is_silent(messages):
+    assert messages(example('f(NAME x)', 'g()')) == []
+
+
+def test_an_example_that_is_not_cmake_is_reported(messages):
+    assert messages(example('Call it with a name and some sources.')) == [
+        'the @example does not parse as CMake; put prose or another language '
+        'in a fenced code block'
+    ]
+
+
+def test_a_fenced_cmake_example_is_checked(messages):
+    assert messages(example('```cmake', 'f(NAME', '```')) == [
+        'the @example does not parse as CMake; put prose or another language '
+        'in a fenced code block'
+    ]
+
+
+def test_a_fence_naming_another_language_is_left_alone(messages):
+    assert messages(example('```sh', 'cmake -DFOO=ON ..', '```')) == []
+
+
+def test_a_symbol_without_an_example_is_not_checked(messages):
+    assert messages('# Just prose.\nfunction(f)\nendfunction()\n') == []
 
 
 def test_a_kind_the_code_does_not_declare_is_left_alone(messages):
@@ -120,8 +155,47 @@ def test_a_kind_the_code_does_not_declare_is_left_alone(messages):
     )
 
 
-def test_a_symbol_with_no_parameters_documented_is_left_alone(messages):
-    assert messages('# Adds a thing.\nfunction(f NAME)\nendfunction()\n') == []
+def test_a_documented_symbol_with_no_parameters_documented_is_still_checked(messages):
+    # A comment with no parameter at all is still a comment; the blind spot
+    # this used to leave was that a symbol stayed unchecked until its author
+    # documented at least one parameter of it.
+    assert messages('# Adds a thing.\nfunction(f NAME)\nendfunction()\n') == [
+        'f takes NAME but it is not documented; add @arg NAME'
+    ]
+
+
+def test_a_symbol_with_no_comment_at_all_is_left_alone(symbols_of):
+    # Undocumented is a separate question from drifting; that one is
+    # --require-docs.
+    symbol = symbols_of('function(f NAME)\nendfunction()\n')[0]
+    doc = doc_parser.parse(tag_lexer.tokenize(symbol.comments))
+    assert checks.check(symbol, doc) == []
+
+
+def test_file_tag_on_a_symbol_is_reported(messages):
+    # @file documents a comment block as a whole; on a function it would
+    # silently do nothing, since the block never reaches `files`. The other
+    # tags keep the parameters fully documented, to isolate this message from
+    # the parameter cross-check.
+    assert messages(
+        documented(
+            '@file',
+            '@option QUIET be quiet',
+            '@param TIMEOUT seconds',
+            '@multiparam SOURCES the sources',
+        )
+    ) == [
+        '@file in the documentation of add_thing documents nothing; a file '
+        'is documented by a comment block of its own'
+    ]
+
+
+def test_file_tag_on_a_block_of_its_own_is_silent():
+    doc = doc_parser.parse(tag_lexer.tokenize(['@file', 'The project itself.']))
+    block = parse.Block(
+        name='', comments=[], comments_line=1, filepath='CMakeLists.txt', line=1
+    )
+    assert checks.check(block, doc) == []
 
 
 def test_commands_declare_no_parameters_of_their_own(tmp_path):

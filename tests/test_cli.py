@@ -1,8 +1,11 @@
 import pathlib
+import re
 
 import pytest
 
 from cmake2md import cli
+from cmake2md import config
+from cmake2md.errors import UsageError
 
 TEMPLATE = """\
 {% for symbol in symbols %}
@@ -125,22 +128,80 @@ def test_check_reports_missing_output(cmake_file, template, tmp_path):
     assert not out.exists()
 
 
-def test_unknown_tag_warns_but_succeeds(template, tmp_path, capsys):
-    source = tmp_path / 'CMakeLists.txt'
-    source.write_text('# @nosuchtag\nfunction(f)\nendfunction()\n', encoding='utf-8')
+def test_write_output_reports_an_os_error_instead_of_a_traceback(tmp_path, monkeypatch):
+    def fail_to_write(self, *args, **kwargs):
+        raise OSError(13, 'Permission denied')
+
+    monkeypatch.setattr(pathlib.Path, 'write_text', fail_to_write)
     out = tmp_path / 'out.md'
-    assert run('-t', template, '-o', out, source) == 0
+    # re.escape: a Windows path's backslashes would otherwise be read as
+    # regex escapes.
+    with pytest.raises(
+        UsageError, match=f'cannot write {re.escape(str(out))}: Permission denied'
+    ):
+        cli.write_output(out, 'content\n', check=False)
+
+
+def test_read_ignore_file_reports_an_os_error_instead_of_a_traceback(
+    tmp_path, monkeypatch
+):
+    (tmp_path / cli.IGNORE_FILE).write_text('*.cmake\n', encoding='utf-8')
+
+    def fail_to_read(self, *args, **kwargs):
+        raise OSError(13, 'Permission denied')
+
+    monkeypatch.setattr(pathlib.Path, 'read_text', fail_to_read)
+    with pytest.raises(UsageError, match='cannot read .*: Permission denied'):
+        cli.read_ignore_file(tmp_path)
+
+
+UNKNOWN_TAG_SOURCE = """\
+# @nosuchtag
+function(f)
+endfunction()
+"""
+
+
+@pytest.fixture
+def unknown_tag(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(UNKNOWN_TAG_SOURCE, encoding='utf-8')
+    return source
+
+
+def test_unknown_tag_warns_but_succeeds_without_strict(
+    template, unknown_tag, tmp_path, capsys
+):
+    assert (
+        run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 0
+    )
     err = capsys.readouterr().err
     assert 'unknown tag @nosuchtag' in err
-    assert str(source) in err
+    assert str(unknown_tag) in err
 
 
-def test_strict_rejects_unknown_tags(template, tmp_path, capsys):
-    source = tmp_path / 'CMakeLists.txt'
-    source.write_text('# @nosuchtag\nfunction(f)\nendfunction()\n', encoding='utf-8')
-    out = tmp_path / 'out.md'
-    assert run('--strict', '-t', template, '-o', out, source) == 1
+def test_strict_rejects_unknown_tags(template, unknown_tag, tmp_path, capsys):
+    assert run('--strict', '-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 1
     assert 'unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_unknown_tag_is_rejected_by_default(template, unknown_tag, tmp_path, capsys):
+    # Strict is what a run does unless told otherwise: a documentation problem
+    # nobody is made to look at is a documentation problem nobody fixes.
+    assert run('-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 1
+    assert 'unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_an_option_warning_is_reported_once_not_twice(template, tmp_path, capsys):
+    # option() is read once as a Command and once as the Variable it also is,
+    # over the same comment; a warning about it must not be printed for both.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @nosuchtag\noption(FOO "help" ON)\n', encoding='utf-8')
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    err = capsys.readouterr().err
+    assert err.count('unknown tag @nosuchtag') == 1
+    # Reported under the Variable's own name, not the generic 'command'.
+    assert ': option FOO: warning:' in err
 
 
 def test_error_message_points_at_the_symbol(template, tmp_path, capsys):
@@ -174,7 +235,7 @@ def test_warning_points_at_the_line_the_tag_is_on(template, tmp_path, capsys):
         'function(f)\nendfunction()\n',
         encoding='utf-8',
     )
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
     assert f'{source}:2: function f: warning:' in capsys.readouterr().err
 
 
@@ -192,7 +253,7 @@ endfunction()
 def test_documentation_disagreeing_with_the_code_warns(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(MISMATCHED_SOURCE, encoding='utf-8')
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
 
     err = capsys.readouterr().err
     assert f'{source}:4: function add_thing: warning: SRCS is documented' in err
@@ -206,6 +267,151 @@ def test_strict_rejects_documentation_disagreeing_with_the_code(
     source.write_text(MISMATCHED_SOURCE, encoding='utf-8')
     assert run('--strict', '-t', template, '-o', tmp_path / 'out.md', source) == 1
     assert 'SRCS is documented as @multiparam' in capsys.readouterr().err
+
+
+SECTIONED_SOURCE = """\
+# @brief Adds a thing.
+#
+# The longer description.
+#
+# @note Call it early.
+# @warning Not thread safe.
+# @todo support OBJECT libraries
+# @example
+# add_thing(NAME x)
+function(add_thing)
+endfunction()
+
+# A helper nobody outside should call.
+#
+# @internal
+function(_helper)
+endfunction()
+"""
+
+
+def test_builtin_template_renders_the_new_sections(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(SECTIONED_SOURCE, encoding='utf-8')
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert 'Adds a thing.' in text
+    assert 'The longer description.' in text
+    assert '> **Note:** Call it early.' in text
+    assert '> **Warning:** Not thread safe.' in text
+    assert '> **TODO:** support OBJECT libraries' in text
+    # Once: the fallback that renders a declared tag must not also render the
+    # sections the template already knows by name.
+    assert text.count('Call it early.') == 1
+    assert '```cmake\nadd_thing(NAME x)\n```' in text
+    # @internal keeps a documented helper out of the public reference.
+    assert '_helper' not in text
+
+
+GROUPED_SOURCE = """\
+# @defgroup build Build targets
+#
+# What gets built.
+
+# @defgroup paths Paths
+#
+# Where to look.
+
+# @ingroup build
+option(A "d" ON)
+"""
+
+
+def test_groups_carry_their_title_description_and_order(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(GROUPED_SOURCE, encoding='utf-8')
+    group_template = tmp_path / 'groups.md.jinja'
+    group_template.write_text(
+        '{% for g in groups %}{{ g.name }}|{{ g.title }}|{{ g.description }}\n'
+        '{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', group_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').splitlines() == [
+        'build|Build targets|What gets built.',
+        'paths|Paths|Where to look.',
+    ]
+
+
+def test_a_repeated_defgroup_name_is_reported_and_only_defined_once(tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @defgroup build Build targets\n#\n# Again.\n',
+        encoding='utf-8',
+    )
+    group_template = tmp_path / 'groups.md.jinja'
+    group_template.write_text(
+        '{% for g in groups %}{{ g.name }}\n{% endfor %}', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', group_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').splitlines().count('build') == 1
+    assert '@defgroup build is already defined at' in capsys.readouterr().err
+
+
+def test_ingroup_naming_an_undefined_group_warns(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @ingroup nosuch\noption(B "d" ON)\n', encoding='utf-8'
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert '@ingroup nosuch names a group that no @defgroup defines' in (
+        capsys.readouterr().err
+    )
+
+
+def test_ingroup_inside_a_standalone_block_is_checked_too(template, tmp_path, capsys):
+    # A block is enriched before any @defgroup is known, since collecting the
+    # blocks is how the groups are found in the first place; an @ingroup
+    # inside one must still be checked once the real list is known.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @ingroup nosuch\n# Just a standalone note.\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert '@ingroup nosuch names a group that no @defgroup defines' in (
+        capsys.readouterr().err
+    )
+
+
+def test_ingroup_is_not_checked_when_no_group_is_defined(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @ingroup build\noption(A "d" ON)\n', encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'names a group' not in capsys.readouterr().err
+
+
+def test_defgroup_on_a_symbol_is_reported(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @defgroup build Build targets\nfunction(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'defines nothing; a group is defined in a comment block' in (
+        capsys.readouterr().err
+    )
+
+
+def test_file_tag_on_a_symbol_is_reported(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @file\n# @brief Adds a thing.\nfunction(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'documents nothing; a file is documented by a comment block' in (
+        capsys.readouterr().err
+    )
 
 
 def test_variables_reach_templates_already_parsed(cmake_file, tmp_path):
@@ -238,7 +444,9 @@ def test_the_signature_is_available_to_templates(tmp_path):
         encoding='utf-8',
     )
     out = tmp_path / 'out.md'
-    assert run('-t', sig_template, '-o', out, source) == 0
+    # --no-strict: the comment doesn't document QUIET, which is beside what
+    # this test is about.
+    assert run('--no-strict', '-t', sig_template, '-o', out, source) == 0
     assert out.read_text(encoding='utf-8').strip() == "['QUIET']"
 
 
@@ -273,6 +481,22 @@ def test_output_dash_is_rejected_with_check(cmake_file, template, capsys):
     assert 'writes nothing to check' in capsys.readouterr().err
 
 
+def test_output_dash_from_the_config_file_writes_to_stdout(
+    cmake_file, tmp_path, monkeypatch, capsys
+):
+    # A path setting is resolved against the config file's own directory,
+    # but '-' means stdout and is not a path at all; resolving it the same
+    # way would create a file literally called '-'.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text(
+        'template = "function.md.jinja"\noutput = "-"\npath = "."\n',
+        encoding='utf-8',
+    )
+    assert run() == 0
+    assert '## example_add_library' in capsys.readouterr().out
+    assert not (tmp_path / '-').exists()
+
+
 def test_directory_is_searched_for_cmake_sources(template, tmp_path):
     (tmp_path / 'sub').mkdir()
     (tmp_path / 'CMakeLists.txt').write_text(
@@ -298,6 +522,15 @@ def test_glob_pattern_is_expanded(template, tmp_path):
     out = tmp_path / 'out.md'
     assert run('-t', template, '-o', out, tmp_path / '*.cmake') == 0
     assert '## from_glob' in out.read_text(encoding='utf-8')
+
+
+def test_a_source_named_twice_is_read_once(cmake_file, template, tmp_path):
+    # A directory and an explicit path to a file inside it can both match the
+    # same source; reading it twice would document every symbol in it twice.
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, tmp_path, cmake_file) == 0
+    text = out.read_text(encoding='utf-8')
+    assert text.count('## example_add_library') == 1
 
 
 def test_no_source_given_is_a_usage_error(template, tmp_path, capsys):
@@ -356,3 +589,639 @@ def test_example_renders(tmp_path):
     # from the ungrouped table.
     assert '`EXAMPLE_STATIC`' in text
     assert '_example_internal_helper' not in text
+
+
+FILE_DOC_SOURCE = """\
+# @file
+# @brief Helpers for building libraries.
+#
+# The longer story about this file.
+
+function(f)
+endfunction()
+"""
+
+
+def test_file_documentation_reaches_templates(tmp_path):
+    source = tmp_path / 'helpers.cmake'
+    source.write_text(FILE_DOC_SOURCE, encoding='utf-8')
+    file_template = tmp_path / 'files.md.jinja'
+    file_template.write_text(
+        '{% for f in files %}{{ f.doc.brief }}|{{ f.doc.description }}\n{% endfor %}',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', file_template, '-o', out, source) == 0
+    assert out.read_text(encoding='utf-8').strip() == (
+        'Helpers for building libraries.|The longer story about this file.'
+    )
+
+
+def test_see_links_to_a_symbol_the_document_defines(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a test.\n#\n# @see add_lib\n# @see other_project_fn\n'
+        'function(add_test_target)\nendfunction()\n\n'
+        '# Adds a library.\nfunction(add_lib)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+    text = out.read_text(encoding='utf-8')
+    assert '[add_lib](#add_lib)' in text
+    # A name this document does not define is left as prose.
+    assert 'other_project_fn' in text
+    assert '[other_project_fn]' not in text
+
+
+def test_see_links_through_pretty_too(tmp_path):
+    # symbol.pretty is rendered by function.md.jinja with only `symbol` in
+    # its context; @see must still resolve against the whole document, which
+    # is the path reference.md.jinja and any custom template take through
+    # `symbols | render` or `{{ symbol.pretty }}`.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a thing.\n#\n# @see other_thing\n'
+        'function(add_thing)\nendfunction()\n\n'
+        '# The other thing.\nfunction(other_thing)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, source) == 0
+    assert '[other_thing](#other_thing)' in out.read_text(encoding='utf-8')
+
+
+def test_parameter_type_and_default_are_rendered(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a test.\n#\n'
+        '# @param TIMEOUT @type seconds @default 30 before it is killed\n'
+        'function(f)\n'
+        '    cmake_parse_arguments(ARG "" "TIMEOUT" "" ${ARGN})\n'
+        'endfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'function.md.jinja', '-o', out, source) == 0
+    assert '(seconds, default `30`)' in out.read_text(encoding='utf-8')
+
+
+def test_json_dump_carries_the_model_and_a_schema_version(cmake_file, tmp_path):
+    import json
+
+    out = tmp_path / 'model.json'
+    assert (
+        run(
+            '-t',
+            'function.md.jinja',
+            '-o',
+            tmp_path / 'o.md',
+            '--json',
+            out,
+            cmake_file,
+        )
+        == 0
+    )
+
+    data = json.loads(out.read_text(encoding='utf-8'))
+    assert data['schema_version'] >= 1
+    names = [s['name'] for s in data['symbols']]
+    assert 'example_add_library' in names
+
+    symbol = next(s for s in data['symbols'] if s['name'] == 'example_add_library')
+    # The parsed comment is plain data, not a repr of the dataclass.
+    assert symbol['doc']['args'][0]['name'] == 'NAME'
+    assert symbol['doc']['params'][0]['required'] is True
+    assert [v['name'] for v in data['variables']] == [
+        'EXAMPLE_BUILD_TESTS',
+        'EXAMPLE_STATIC',
+        'EXAMPLE_DIR',
+    ]
+
+
+def test_json_alone_needs_no_template(cmake_file, tmp_path):
+    # A consumer that only wants the parsed model has no use for a template;
+    # requiring one anyway forces a throwaway --template/--output pair.
+    import json
+
+    out = tmp_path / 'model.json'
+    assert run('--json', out, cmake_file) == 0
+    names = [s['name'] for s in json.loads(out.read_text(encoding='utf-8'))['symbols']]
+    assert 'example_add_library' in names
+
+
+def test_json_to_stdout_is_rejected_with_check(cmake_file, template, tmp_path, capsys):
+    assert (
+        run(
+            '--check',
+            '-t',
+            template,
+            '-o',
+            tmp_path / 'o.md',
+            '--json',
+            '-',
+            cmake_file,
+        )
+        == 1
+    )
+    assert 'writes nothing to check' in capsys.readouterr().err
+
+
+UNDOCUMENTED_SOURCE = """\
+# Documented.
+function(documented)
+endfunction()
+
+function(bare)
+endfunction()
+
+function(_private)
+endfunction()
+
+# Documented but private.
+#
+# @internal
+function(helper)
+endfunction()
+"""
+
+
+def test_require_docs_reports_only_public_undocumented_symbols(
+    template, tmp_path, capsys
+):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(UNDOCUMENTED_SOURCE, encoding='utf-8')
+    assert run('--require-docs', '-t', template, '-o', tmp_path / 'o.md', source) == 1
+
+    err = capsys.readouterr().err
+    assert 'function bare: error: undocumented' in err
+    # A leading underscore and an explicit @internal both mean private.
+    assert '_private' not in err
+    assert 'helper' not in err
+
+
+def test_without_require_docs_an_undocumented_symbol_is_fine(
+    template, tmp_path, capsys
+):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(UNDOCUMENTED_SOURCE, encoding='utf-8')
+    assert run('-t', template, '-o', tmp_path / 'o.md', source) == 0
+    assert 'undocumented' not in capsys.readouterr().err
+
+
+def test_check_shows_what_differs(cmake_file, template, tmp_path, capsys):
+    out = tmp_path / 'out.md'
+    out.write_text('stale\n', encoding='utf-8')
+    assert run('--check', '-t', template, '-o', out, cmake_file) == 1
+
+    err = capsys.readouterr().err
+    assert 'out of date' in err
+    assert '-stale' in err
+    assert '(generated)' in err
+
+
+def test_exclude_skips_matching_sources(template, tmp_path):
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'tests' / 'b.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('--exclude', '*/tests/*', '-t', template, '-o', out, tmp_path) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## kept' in text
+    assert 'skipped' not in text
+
+
+def test_exclude_matches_a_bare_file_name_too(template, tmp_path):
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'test_helpers.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('--exclude', 'test_*.cmake', '-t', template, '-o', out, tmp_path) == 0
+    assert 'skipped' not in out.read_text(encoding='utf-8')
+
+
+def test_ignore_file_adds_exclusions(template, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '.cmake2mdignore').write_text(
+        '# what CI does not document\ntest_*.cmake\n', encoding='utf-8'
+    )
+    (tmp_path / 'a.cmake').write_text(
+        '# Doc\nfunction(kept)\nendfunction()\n', encoding='utf-8'
+    )
+    (tmp_path / 'test_helpers.cmake').write_text(
+        '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', template, '-o', out, tmp_path) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## kept' in text
+    assert 'skipped' not in text
+
+
+INJECTABLE = """\
+# My project
+
+Prose the author wrote.
+
+<!-- BEGIN_CMAKE2MD -->
+what was generated last time
+<!-- END_CMAKE2MD -->
+
+Prose after it.
+"""
+
+
+def test_inject_replaces_only_what_is_between_the_markers(
+    cmake_file, template, tmp_path
+):
+    out = tmp_path / 'README.md'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert text.startswith('# My project\n\nProse the author wrote.\n')
+    assert text.endswith('Prose after it.\n')
+    assert '## example_add_library' in text
+    assert 'what was generated last time' not in text
+
+
+def test_inject_is_idempotent(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.md'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    once = out.read_text(encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    assert out.read_text(encoding='utf-8') == once
+    # And --check agrees that there is nothing to do.
+    assert run('--check', '--inject', '-t', template, '-o', out, cmake_file) == 0
+
+
+def test_inject_without_markers_says_what_is_missing(
+    cmake_file, template, tmp_path, capsys
+):
+    out = tmp_path / 'README.md'
+    out.write_text('# My project\n', encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 1
+    assert 'no place to inject into' in capsys.readouterr().err
+
+
+def test_inject_needs_the_file_to_exist(cmake_file, template, tmp_path, capsys):
+    assert run('--inject', '-t', template, '-o', tmp_path / 'nope.md', cmake_file) == 1
+    assert '--inject needs' in capsys.readouterr().err
+
+
+def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_path):
+    out = tmp_path / 'ref.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## Contents' in text
+    assert '[example_add_library](#example_add_library)' in text
+    assert '## Build options' in text
+    assert '| `EXAMPLE_BUILD_TESTS` |' in text
+    # Undocumented symbols stay out, as in the other built-in template.
+    assert 'undocumented_function' not in text
+
+
+def test_reference_template_lays_itself_out_by_group(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @defgroup targets Targets\n'
+        '#\n'
+        '# Adding things to build.\n'
+        '\n'
+        '# Adds a library.\n'
+        '#\n'
+        '# @ingroup targets\n'
+        'function(add_lib)\n'
+        'endfunction()\n'
+        '\n'
+        '# In no group at all.\n'
+        'function(loose_one)\n'
+        'endfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'ref.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, source) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '## Targets' in text
+    assert 'Adding things to build.' in text
+    # What no group claims still gets a home.
+    assert '## Functions and macros' in text
+    assert '## loose_one' in text
+
+
+def test_list_templates_names_both_builtins(capsys):
+    assert run('--list-templates') == 0
+    out = capsys.readouterr().out
+    assert 'function.md.jinja' in out
+    assert 'reference.md.jinja' in out
+
+
+CONFIG = """\
+template = ["function.md.jinja"]
+output = ["docs/reference.md"]
+path = ["."]
+"""
+
+#: The smallest config file that renders the directory it is in.
+BASE_CONFIG = 'template = "function.md.jinja"\noutput = "out.md"\npath = "."\n'
+
+
+def write_config(directory, extra=''):
+    """Write a config file rendering `directory`, plus whatever else it says."""
+    path = directory / config.DEFAULT_FILE
+    path.write_text(BASE_CONFIG + extra, encoding='utf-8')
+    return path
+
+
+def test_config_file_supplies_the_arguments(cmake_file, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
+    assert run() == 0
+    text = (tmp_path / 'docs' / 'reference.md').read_text(encoding='utf-8')
+    assert '## example_add_library' in text
+
+
+def test_the_command_line_wins_over_the_config_file(
+    cmake_file, template, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
+    out = tmp_path / 'elsewhere.md'
+    assert run('-t', template, '-o', out) == 0
+    assert out.exists()
+    assert not (tmp_path / 'docs').exists()
+
+
+def test_an_empty_config_file_says_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / config.DEFAULT_FILE
+    path.write_text('', encoding='utf-8')
+    assert run() == 1
+    # Naming the file that was read is the useful half: the settings were
+    # expected to be in it.
+    assert f'no --template given by {path}' in capsys.readouterr().err
+
+
+def test_no_config_file_at_all_says_so(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '.git').mkdir()
+    assert run() == 1
+    assert f'no --template given and no {config.DEFAULT_FILE} found' in (
+        capsys.readouterr().err
+    )
+
+
+def test_the_config_file_is_found_from_a_subdirectory(
+    cmake_file, tmp_path, monkeypatch
+):
+    # Where a project is configured and where its commands are run are not
+    # the same place: a build directory is the usual one.
+    write_config(tmp_path)
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    # Beside the config file, not beside the caller: a relative path in the
+    # file would otherwise mean a different thing from every directory.
+    assert (tmp_path / 'out.md').exists()
+    assert not (build / 'out.md').exists()
+
+
+def test_the_search_stops_at_a_repository(cmake_file, tmp_path, monkeypatch, capsys):
+    write_config(tmp_path)
+    inner = tmp_path / 'vendored'
+    (inner / '.git').mkdir(parents=True)
+    monkeypatch.chdir(inner)
+    assert run() == 1
+    assert 'no --template given' in capsys.readouterr().err
+
+
+def test_a_builtin_template_named_in_the_config_file_stays_a_name(
+    cmake_file, tmp_path, monkeypatch
+):
+    # Only a template that is really a file is read against the config file;
+    # a built-in is a name, and resolving it would leave nothing to load.
+    write_config(tmp_path)
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_the_ignore_file_is_read_from_the_project_root(
+    cmake_file, tmp_path, monkeypatch
+):
+    write_config(tmp_path)
+    (tmp_path / cli.IGNORE_FILE).write_text('CMakeLists.txt\n', encoding='utf-8')
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    # The only source there is was excluded, so nothing was documented.
+    assert '## example_add_library' not in (tmp_path / 'out.md').read_text(
+        encoding='utf-8'
+    )
+
+
+@pytest.mark.parametrize(
+    'setting, message',
+    [
+        # 'no' is a non-empty string and so reads as true: a setting the file
+        # got wrong must be refused, not silently taken to mean its opposite.
+        ('strict = "no"', 'strict must be true or false'),
+        ('check = 1', 'check must be true or false'),
+        ('json = 3', 'json must be a string'),
+        ('template = 3', 'template must be a string or a list of them'),
+        ('tags = 3', '[tags] must be a table'),
+    ],
+)
+def test_a_setting_of_the_wrong_type_is_refused(
+    setting, message, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text(f'{setting}\n', encoding='utf-8')
+    assert run() == 1
+    assert message in capsys.readouterr().err
+
+
+def test_an_unknown_setting_names_the_ones_there_are(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text('nosuch = 1\n', encoding='utf-8')
+    assert run() == 1
+    err = capsys.readouterr().err
+    assert 'has no setting called nosuch' in err
+    assert 'template' in err
+
+
+def test_a_named_config_file_must_exist(tmp_path, capsys):
+    assert run('--config', tmp_path / 'nope.toml') == 1
+    assert 'no config file at' in capsys.readouterr().err
+
+
+def test_a_named_config_file_is_read_from_anywhere(cmake_file, tmp_path, monkeypatch):
+    path = write_config(tmp_path)
+    monkeypatch.chdir(tmp_path.parent)
+    assert run('--config', path) == 0
+    assert (tmp_path / 'out.md').exists()
+
+
+def test_a_lone_string_is_accepted_where_a_list_belongs(
+    cmake_file, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path)
+    assert run() == 0
+    assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_a_dash_in_a_setting_name_reads_as_an_underscore(
+    cmake_file, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path, 'require-docs = true\n')
+    # The fixture has an undocumented function in it, which is what
+    # require-docs is there to catch.
+    assert run() == 1
+    assert 'undocumented' in capsys.readouterr().err
+
+
+def test_no_strict_on_the_command_line_beats_the_config_file(
+    unknown_tag, tmp_path, monkeypatch, capsys
+):
+    # A flag turned off explicitly is not the same as a flag left unsaid; the
+    # file only fills in what the command line did not say.
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path, 'strict = true\n')
+    assert run('--no-strict') == 0
+    assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_the_config_file_can_turn_strict_off(
+    unknown_tag, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path, 'strict = false\n')
+    assert run() == 0
+    assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_no_check_on_the_command_line_beats_the_config_file(
+    cmake_file, tmp_path, monkeypatch
+):
+    # check = true in the config file must not be the only way to write the
+    # output; --no-check is how a run overrides it for once.
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path, 'check = true\n')
+    assert run('--no-check') == 0
+    assert (tmp_path / 'out.md').exists()
+
+
+DOCUMENTED_WITH_A_CUSTOM_TAG = """\
+# @brief Adds a thing.
+#
+# @author Alice
+function(add_thing)
+endfunction()
+"""
+
+
+def test_a_tag_the_config_file_declares_is_rendered(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, '\n[tags]\nauthor = { label = "Author:" }\n')
+    # Strict by default: an undeclared tag would fail the run instead.
+    assert run() == 0
+    assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, '\n[tags]\nauthor = {}\n')
+    assert run() == 0
+    assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path, monkeypatch):
+    # str.capitalize() would lowercase everything after the first letter,
+    # turning @seeAlso into 'Seealso:' rather than 'SeeAlso:'.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        '# @brief Adds a thing.\n#\n# @seeAlso other_thing\n'
+        'function(add_thing)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    write_config(tmp_path, '\n[tags]\nseeAlso = {}\n')
+    assert run() == 0
+    assert '> **SeeAlso:** other_thing' in (tmp_path / 'out.md').read_text(
+        encoding='utf-8'
+    )
+
+
+@pytest.mark.parametrize(
+    'tags, message',
+    [
+        ('note = { label = "x" }\n', '@note is already a tag of cmake2md'),
+        ('author = { text = "none" }\n', 'text must be one of paragraph, block'),
+        ('author = { nosuch = 1 }\n', 'has no setting called nosuch'),
+        ('author = "paragraph"\n', 'author must be a table'),
+        ('"not a name" = {}\n', 'is not a name a tag can have'),
+        ('author = { takes_name = "yes" }\n', 'takes_name must be true or false'),
+    ],
+)
+def test_a_doubtful_tag_declaration_is_a_usage_error(
+    tags, message, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CMakeLists.txt').write_text(
+        DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
+    )
+    write_config(tmp_path, '\n[tags]\n' + tags)
+    assert run() == 1
+    assert message in capsys.readouterr().err
+
+
+def test_the_shipped_cmake_module_documents_itself(tmp_path):
+    # The module is written with cmake2md's own tags, so it is both the
+    # integration point and a worked example; strict keeps the two honest.
+    root = pathlib.Path(__file__).resolve().parent.parent
+    out = tmp_path / 'module.md'
+    assert (
+        run(
+            '-t',
+            'reference.md.jinja',
+            '-o',
+            out,
+            root / 'cmake' / 'cmake2md.cmake',
+        )
+        == 0
+    )
+    text = out.read_text(encoding='utf-8')
+    assert '## cmake2md_generate' in text
+    assert '**TARGET <value>** the name of the target to add' in text
+    # The verifying target is derived from TARGET, not asked for by an option.
+    assert 'CHECK' not in text
+
+
+def test_defaults_cover_every_config_setting_but_json():
+    # cli.DEFAULTS is derived from config.KEYS precisely so the two cannot
+    # drift apart; this is the guard against a new List/Bool/Tags setting
+    # being added to one and forgotten in the other.
+    assert set(cli.DEFAULTS) == set(config.KEYS) - {'json'}

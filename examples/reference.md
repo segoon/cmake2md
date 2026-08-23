@@ -26,6 +26,18 @@ example_add_library(
 * **SOURCES <value>...** the source files to compile
 * **DEPENDS <value>...** targets this library links against
 
+
+```cmake
+example_add_library(
+    NAME example_core
+    OUTPUT_NAME core
+    SOURCES src/a.cpp src/b.cpp
+)
+```
+
+
+> **Note:** Call this after project(), so that the compiler is known.
+
 ## example_add_test
 
 **Deprecated.**
@@ -97,6 +109,8 @@ example_fail(
 
 ## Build targets
 
+What gets built, and what is left out.
+
 | Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_BUILD_TESTS` | Build the test suite | `ON` |
@@ -104,6 +118,8 @@ example_fail(
 
 
 ## Compilation modes
+
+How the sources are compiled.
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -113,6 +129,8 @@ example_fail(
 
 ## Paths
 
-| Variable | Description | Default |
+Where the build looks for things it does not carry itself.
+
+| Option | Description | Default |
 |--------|-------------|---------|
 | `EXAMPLE_TOOLCHAIN_DIR` | Toolchain location | `/usr/local/toolchain` |
