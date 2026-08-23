@@ -18,10 +18,6 @@ pip install cmake2md      # or: pipx install cmake2md
 
 Requires Python 3.10 or newer.
 
-While cmake2md is at 0.x, the tag vocabulary and the values handed to
-templates may still change; pin `cmake2md~=0.1` if you generate documentation
-in CI.
-
 ## Quick start
 
 Document a function (or a macro) with `@`-tags in the comment block directly
@@ -44,7 +40,7 @@ Render it with the built-in template:
 cmake2md --template function.md.jinja --output docs/reference.md CMakeLists.txt
 ```
 
-That function becomes:
+That function becomes `docs/reference.md`:
 
 ````markdown
 ## example_add_library
@@ -76,7 +72,7 @@ a `macro()` or a command call. A blank line ends the run. The block is dedented
 as a whole, so the space in the conventional `# ` disappears while indentation
 *inside* the comment — nested lists, code blocks — is preserved.
 
-Both comment forms carry documentation. A bracket comment works the same way,
+Both cmake comment forms carry documentation. A bracket comment works the same way,
 including the `#[==[.rst:` style CMake's own modules use, where the `.rst:`
 marker and the `#` of the closing `#]==]` are punctuation rather than text:
 
@@ -152,10 +148,14 @@ CMakeLists.txt:3: function example_add_library: warning: example_add_library
 takes SOURCES but it is not documented; add @multiparam SOURCES
 ```
 
-Four things are read out of the code: both call forms of
-`cmake_parse_arguments()`, the named parameters of `function(f NAME TYPE)`,
-`set(VAR ... PARENT_SCOPE)` and `return(PROPAGATE VAR)` — the last two being
-what `@set_parent_scope` documents.
+Four things are read out of the code:
+
+- both call forms of `cmake_parse_arguments()`
+- the named parameters of `function(f NAME TYPE)`
+- `set(VAR ... PARENT_SCOPE)`
+- `return(PROPAGATE VAR)`
+
+The last two being what `@set_parent_scope` documents.
 
 What the code does not state plainly is never guessed at, and so never warned
 about. A keyword list built from a variable, a body with two
