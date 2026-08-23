@@ -50,6 +50,9 @@
   is not a mistake, since a group with no title reads by its own name.
 - A declared tag with no `label` of its own is labelled after itself with its
   inner capitals kept, so `@seeAlso` reads `SeeAlso:` rather than `Seealso:`.
+- An `@ingroup` inside a standalone comment block is now checked against the
+  groups `@defgroup` actually defines, like one on a function, macro,
+  variable or command already was.
 
 ### Added
 

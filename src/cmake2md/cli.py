@@ -360,11 +360,37 @@ class DocRules:
     strict: bool
 
 
+def check_and_report(
+    item: parse.Documented,
+    doc: doc_parser.DocComment,
+    groups: frozenset[str],
+    rules: DocRules,
+    reported: set[tuple[str, int]] | None,
+) -> None:
+    """Report where `doc` disagrees with the code, or with the groups defined.
+
+    An `option()` or `set(... CACHE ...)` call is read twice — once as a
+    `Command`, once as the `Variable` it also is — over the very same comment.
+    `reported` is how the two are kept from printing every diagnostic about it
+    twice: it is shared across a whole run, and a comment block is reported
+    only the first time its (file, line) is seen. comments_line is 0 for an
+    item with no comment at all, which carries no warnings to begin with, so
+    nothing is lost by not deduplicating that.
+    """
+    key = (item.filepath, item.comments_line)
+    if reported is None or item.comments_line == 0 or key not in reported:
+        report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
+        if reported is not None and item.comments_line:
+            reported.add(key)
+
+
 def enrich(
     item: parse.Documented,
     rules: DocRules,
     groups: frozenset[str] = frozenset(),
     reported: set[tuple[str, int]] | None = None,
+    *,
+    check_now: bool = True,
 ) -> dict[str, Any]:
     """Attach the parsed doc comment to `item`.
 
@@ -373,11 +399,10 @@ def enrich(
     no signature of its own for the function template to render, so its
     description is all `pretty` will ever be.
 
-    An `option()` or `set(... CACHE ...)` call is read twice — once as a
-    `Command`, once as the `Variable` it also is — over the very same comment.
-    `reported` is how the two are kept from printing every diagnostic about it
-    twice: it is shared across a whole run, and a comment block is reported
-    only the first time its (file, line) is seen.
+    `check_now=False` defers `check_and_report` to the caller: a standalone
+    comment block is enriched before any `@defgroup` in the sources is known,
+    since it is what discovers them, so an `@ingroup` inside one cannot be
+    checked against the real group list until every block has been read.
     """
     try:
         doc = doc_parser.parse(
@@ -389,13 +414,8 @@ def enrich(
     except ParseError as exc:
         raise exc.at(item.location_at(exc.line)) from None
 
-    # comments_line is 0 for an item with no comment at all, which carries no
-    # warnings to begin with, so nothing is lost by not deduplicating that.
-    key = (item.filepath, item.comments_line)
-    if reported is None or item.comments_line == 0 or key not in reported:
-        report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
-        if reported is not None and item.comments_line:
-            reported.add(key)
+    if check_now:
+        check_and_report(item, doc, groups, rules, reported)
 
     res = dataclasses.asdict(item)
     res['doc'] = doc
@@ -594,10 +614,15 @@ def run(args: argparse.Namespace) -> int:
     reported: set[tuple[str, int]] = set()
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
-    # against.
-    documented_blocks = [enrich(b, rules, reported=reported) for b in blocks]
+    # against, including an @ingroup inside a standalone block itself, so
+    # checking those blocks is deferred until every one has been read.
+    documented_blocks = [
+        enrich(b, rules, reported=reported, check_now=False) for b in blocks
+    ]
     groups = collect_groups(documented_blocks)
     known = frozenset(group['name'] for group in groups)
+    for block, doc_block in zip(blocks, documented_blocks, strict=True):
+        check_and_report(block, doc_block['doc'], known, rules, reported)
 
     enriched_symbols = [enrich(s, rules, known, reported) for s in symbols]
     # Every symbol is enriched before any of them is rendered, so @see can

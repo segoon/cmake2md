@@ -14,8 +14,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Smaller things
 
-* An `@ingroup` inside a standalone comment block is never validated: those
-  blocks are enriched before the groups are known, with an empty set.
 * `comment_text` strips exactly one `#`, so a Doxygen-style `## text` block
   keeps a stray `#`.
 

@@ -363,6 +363,21 @@ def test_ingroup_naming_an_undefined_group_warns(template, tmp_path, capsys):
     )
 
 
+def test_ingroup_inside_a_standalone_block_is_checked_too(template, tmp_path, capsys):
+    # A block is enriched before any @defgroup is known, since collecting the
+    # blocks is how the groups are found in the first place; an @ingroup
+    # inside one must still be checked once the real list is known.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        GROUPED_SOURCE + '\n# @ingroup nosuch\n# Just a standalone note.\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert '@ingroup nosuch names a group that no @defgroup defines' in (
+        capsys.readouterr().err
+    )
+
+
 def test_ingroup_is_not_checked_when_no_group_is_defined(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text('# @ingroup build\noption(A "d" ON)\n', encoding='utf-8')
