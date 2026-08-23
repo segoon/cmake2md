@@ -106,7 +106,7 @@ endfunction()
 | `@type NAME` | function, macro | What the *preceding* parameter's value should be. |
 | `@default VALUE` | function, macro | What the *preceding* parameter is worth when left out. |
 | `@ingroup NAME` | function, macro, command | Assigns the symbol to a group. |
-| `@defgroup NAME <title>` | a comment block of its own | Defines a group: its title is the rest of the line, its description the paragraphs below. |
+| `@defgroup NAME <title>` | a comment block of its own | Defines a group: its title runs to the next blank line, like `@brief` does, and its description is the paragraphs below. |
 | `@file` | a comment block of its own | Marks the block as documenting the file it is in. |
 | `@deprecated` | function, macro, command | Marks the whole symbol as deprecated. Text after it stays in the description, where it reads as the reason. |
 | `@internal` | function, macro, command | Marks the symbol as not part of the public interface. The `public` filter drops it. |
@@ -137,7 +137,10 @@ Two things are left in the text and reported rather than acted on: a tag
 cmake2md does not recognise, and a known tag that is not followed by something
 that looks like a name (`@ingroup, so …` is prose, not a group named `,`).
 Both fail the run; pass `--no-strict` to have them reported as warnings and
-carry on.
+carry on. A tag that takes a name but has nothing at all after it — not even
+prose, just the end of the comment or another tag — is a harder error still:
+there is no literal text to fall back to keeping, so it fails the run even
+under `--no-strict`.
 
 ### Tags of your own
 
@@ -255,11 +258,10 @@ Each entry is a dict with:
 | `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
 | `comments` | The raw comment lines, dedented. |
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
-| `type_` | Symbols: `'function'` or `'macro'`. |
+| `type_` | Symbols: `'function'` or `'macro'`. Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
 | `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
 | `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
 | `command` | Variables only: `'option'` or `'set'`. |
-| `type_` | Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
 | `default` | Variables only: the value the entry holds unless the user overrides it. |
 | `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
 | `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
@@ -357,7 +359,7 @@ document, listing every documented symbol and nothing else.
 ```
 cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
          [--json OUTPUT] [--exclude PATTERN]... [--require-docs]
-         [--no-strict] [--check] CMAKE_FILE...
+         [--strict] [--check] CMAKE_FILE...
 ```
 
 | Flag | Effect |
@@ -366,14 +368,18 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
 | `-c`, `--config` | Read the arguments from this TOML file instead of the nearest `cmake2md.toml`. |
-| `--inject` | Write between the markers of an existing `--output` file instead of replacing it. |
+| `--inject` / `--no-inject` | Write between the markers of an existing `--output` file instead of replacing it. |
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
-| `--require-docs` | Exit non-zero if a public `function()` or `macro()` has no doc comment. |
-| `--no-strict` | Report documentation problems — a doubtful `@tag`, or a comment that disagrees with the code — as warnings rather than failing the run, which is what it does by default. |
-| `--check` | Write nothing; exit non-zero if any output is missing or stale. |
+| `--require-docs` / `--no-require-docs` | Exit non-zero if a public `function()` or `macro()` has no doc comment. |
+| `--strict` / `--no-strict` | Whether to treat a documentation problem — a doubtful `@tag`, or a comment that disagrees with the code — as an error rather than a warning. On by default; `--no-strict` reports them as warnings and carries on. |
+| `--check` / `--no-check` | Write nothing; exit non-zero if any output is missing or stale. |
 | `--list-templates` | List the built-in template names and exit. |
 | `--version` | Print the version and exit. |
+
+Each of `--inject`, `--require-docs`, `--strict` and `--check` has a `--no-`
+form, so any of them recorded as `true` in `cmake2md.toml` can still be
+turned off for one run.
 
 Each `CMAKE_FILE` is a file, a directory to search for `CMakeLists.txt` and
 `*.cmake` (dot-directories are skipped), or a glob pattern. cmake2md expands

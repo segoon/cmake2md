@@ -12,20 +12,6 @@ hands templates raw argument lists, which is where every comparable tool
   `serialize`, which is the `Any` the project's own rules rule out. A small
   dataclass with an `asdict()` would type the whole render path.
 
-## Documentation
-
-* `function.md.jinja` says a project declares tags in `[tool.cmake2md.tags]`;
-  the table is `[tags]`, as the README and `config.py` have it.
-* The README says a `@defgroup` title is "the rest of the line". It is a
-  paragraph: a title written over two lines is all title.
-* The template-key table lists `type_` twice, once for symbols and once for
-  variables, which reads as a contradiction.
-* Neither the README nor `--help` says that a registered tag with nothing at
-  all after it fails the run even under `--no-strict`, while `@ingroup, so …`
-  is only a warning. The `doc_parser` module docstring says it; the
-  user-facing documentation does not.
-* The flag table gives `--no-strict` but not the affirmative `--strict`.
-
 ## Smaller things
 
 * An empty `@note` becomes a section with no text, rendered as a bare

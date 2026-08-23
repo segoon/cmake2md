@@ -119,8 +119,9 @@ TAG_SPECS: dict[str, TagSpec] = {
         for name, label in BLOCK_TAGS.items()
     },
     BRIEF: TagSpec(TagTarget.Summary, text=TagText.Paragraph),
-    # The title runs to the end of the line; the paragraphs below it are the
-    # group's description, which is the enclosing comment block's own.
+    # The title runs to the next blank line, like @brief's does; the
+    # paragraphs below it are the group's description, which is the
+    # enclosing comment block's own.
     DEFGROUP: TagSpec(
         TagTarget.Section, takes_name=True, text=TagText.Paragraph, block_only=True
     ),
