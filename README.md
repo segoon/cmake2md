@@ -454,6 +454,7 @@ Copy it into your module path, or fetch it:
 ```cmake
 include(cmake2md)
 
+# All options are read from cmake2md.toml
 cmake2md_generate(
     # `cmake --build build --target docs` regenerates the documentation.
     # A second target, `docs-check`, verifies instead that it is up to date
