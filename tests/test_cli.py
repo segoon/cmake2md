@@ -823,9 +823,21 @@ def test_the_command_line_wins_over_the_config_file(
 
 def test_an_empty_config_file_says_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / config.DEFAULT_FILE).write_text('', encoding='utf-8')
+    path = tmp_path / config.DEFAULT_FILE
+    path.write_text('', encoding='utf-8')
     assert run() == 1
-    assert 'no --template given' in capsys.readouterr().err
+    # Naming the file that was read is the useful half: the settings were
+    # expected to be in it.
+    assert f'no --template given by {path}' in capsys.readouterr().err
+
+
+def test_no_config_file_at_all_says_so(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / '.git').mkdir()
+    assert run() == 1
+    assert f'no --template given and no {config.DEFAULT_FILE} found' in (
+        capsys.readouterr().err
+    )
 
 
 def test_the_config_file_is_found_from_a_subdirectory(

@@ -459,18 +459,14 @@ cmake2md_generate(
     # A second target, `docs-check`, verifies instead that it is up to date
     # and fails with a diff when it is not, which is what a CI job wants.
     TARGET docs
-    # A path, or the name of a built-in template.
-    TEMPLATE reference.md.jinja
-    # Written into the source tree, since it is committed.
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
-    # The CMake files to read; the current source directory when omitted.
-    SOURCES cmake/helpers.cmake
-    # Anything else cmake2md takes.
-    EXTRA_ARGS --require-docs
     # Build `docs` as part of the default build.
     ALL
 )
 ```
+
+That is the whole of it: what to render, where to write it and which files to
+read are in `cmake2md.toml`, said once. The targets run cmake2md from the
+current source directory, which is where it looks for that file.
 
 The module is documented with cmake2md's own tags, so it also serves as a
 worked example.

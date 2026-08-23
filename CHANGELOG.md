@@ -9,10 +9,12 @@
   `label` say how — so it is recognised rather than reported,
   reachable as `doc.of_kind('author')`, and rendered by the built-in template
   under its label without anyone writing a template.
-- `cmake/cmake2md.cmake`, a module whose `cmake2md_generate()` adds two build
-  targets that run cmake2md — one that writes the documentation and a
-  `-check` companion that verifies it — so a CMake project can document itself
-  from its own build. It is written with cmake2md's own tags, and the test
+- `cmake/cmake2md.cmake`, a module whose `cmake2md_generate(TARGET docs)` adds
+  two build targets that run cmake2md — one that writes the documentation and
+  a `-check` companion that verifies it — so a CMake project can document
+  itself from its own build. `TARGET` is all it takes: the rest is in
+  `cmake2md.toml`, and a target that repeated any of it would be a second
+  place to keep in step. It is written with cmake2md's own tags, and the test
   suite holds it to `--strict`.
 - A config file: the nearest `cmake2md.toml` at or above the working
   directory, or any TOML file named with `--config`, so a CI step is

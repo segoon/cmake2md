@@ -177,18 +177,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_config(args: argparse.Namespace) -> pathlib.Path:
+def apply_config(args: argparse.Namespace) -> pathlib.Path | None:
     """Fill in from the config file whatever the command line left unsaid.
 
     The command line wins, always: a config file is where a project records
     what it usually does, not something that can override what was just asked
-    for.  Returns the project root: where the file was found, or the working
-    directory when there is none.
+    for.  Returns the file it read, or None when there was none.
     """
     if args.config is None:
         path = config.find(pathlib.Path.cwd())
         if path is None:
-            return pathlib.Path.cwd()
+            return None
     else:
         path = pathlib.Path(args.config)
         if not path.is_file():
@@ -202,7 +201,7 @@ def apply_config(args: argparse.Namespace) -> pathlib.Path:
         # explicit --no-strict.
         if current is None or current == []:
             setattr(args, key, value)
-    return path.parent
+    return path
 
 
 def apply_defaults(args: argparse.Namespace) -> None:
@@ -217,11 +216,20 @@ def apply_defaults(args: argparse.Namespace) -> None:
             setattr(args, key, value)
 
 
-def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
+def validate_args(
+    args: argparse.Namespace, config_path: pathlib.Path | None = None
+) -> list[tuple[str, str]]:
+    # Where the missing setting was meant to come from is the useful half of
+    # the message: a run with no arguments at all is one that expected a
+    # config file to be found, and it was not.
+    if config_path is None:
+        source = f'and no {config.DEFAULT_FILE} found'
+    else:
+        source = f'by {config_path} or the command line'
     if not args.template:
-        raise UsageError('no --template given, nothing to render')
+        raise UsageError(f'no --template given {source}, nothing to render')
     if not args.path:
-        raise UsageError('no CMAKE_FILE given, nothing to read')
+        raise UsageError(f'no CMAKE_FILE given {source}, nothing to read')
     if len(args.template) != len(args.output):
         if not args.output and any(':' in t for t in args.template):
             raise UsageError(
@@ -467,9 +475,13 @@ def run(args: argparse.Namespace) -> int:
     if args.list_templates:
         return list_templates()
 
-    root = apply_config(args)
+    config_path = apply_config(args)
     apply_defaults(args)
-    pairs = validate_args(args)
+    pairs = validate_args(args, config_path)
+
+    # The project root: where the config file was found, and so what the
+    # paths in it were read against.
+    root = config_path.parent if config_path else pathlib.Path.cwd()
 
     specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]
     # Most specific first: what the user asked for by -I, then the directory a

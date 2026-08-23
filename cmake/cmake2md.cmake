@@ -8,13 +8,12 @@ build, rather than from a separate script that has to be remembered:
 ```cmake
 include(cmake2md)
 
-cmake2md_generate(
-    TARGET docs
-    TEMPLATE reference.md.jinja
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
-    SOURCES cmake/helpers.cmake
-)
+cmake2md_generate(TARGET docs)
 ```
+
+What to render, where to write it and which files to read are in the
+project's `cmake2md.toml`, so they are written once rather than once here and
+once there.
 
 The module is itself documented with cmake2md's own tags, so it doubles as a
 worked example.
@@ -27,41 +26,31 @@ worked example.
 #[==[.rst:
 @brief Adds targets that generate documentation from CMake sources.
 
-Two of them: TARGET writes OUTPUT, and `<TARGET>-check` verifies that OUTPUT
-is up to date and fails when it is not, which is what a CI job wants. Both
-say the same thing about the same files, so both come from one call.
+Two of them: TARGET writes the documentation, and `<TARGET>-check` verifies
+that it is up to date and fails when it is not, which is what a CI job wants.
 
 Neither is built by default: documentation that regenerates on every build is
 documentation that shows up in every diff. Ask for one by name, or pass ALL.
+
+cmake2md is run from the current source directory, and reads the nearest
+`cmake2md.toml` at or above it. Everything it does is said there; a target
+that repeated any of it would be a second place to keep in step.
 
 @ingroup cmake
 
 @param TARGET @required the name of the target to add; the verifying target
     is named after it, with `-check` on the end
-@param TEMPLATE @required the template to render, a path or a built-in name
-@param OUTPUT @required the file to write
-@multiparam SOURCES the CMake files to read; the current source directory
-    when none are given
-@multiparam EXTRA_ARGS further arguments for cmake2md, such as --require-docs
 @option ALL build TARGET as part of the default build
 
 @example
-cmake2md_generate(
-    TARGET docs
-    TEMPLATE reference.md.jinja
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
-)
+cmake2md_generate(TARGET docs)
 #]==]
 function(cmake2md_generate)
-    cmake_parse_arguments(
-        ARG "ALL" "TARGET;TEMPLATE;OUTPUT" "SOURCES;EXTRA_ARGS" ${ARGN}
-    )
+    cmake_parse_arguments(ARG "ALL" "TARGET" "" ${ARGN})
 
-    foreach(required TARGET TEMPLATE OUTPUT)
-        if(NOT ARG_${required})
-            message(FATAL_ERROR "cmake2md_generate: ${required} is required")
-        endif()
-    endforeach()
+    if(NOT ARG_TARGET)
+        message(FATAL_ERROR "cmake2md_generate: TARGET is required")
+    endif()
 
     if(NOT CMAKE2MD_EXECUTABLE)
         find_program(CMAKE2MD_EXECUTABLE cmake2md)
@@ -75,22 +64,6 @@ function(cmake2md_generate)
         )
     endif()
 
-    if(NOT ARG_SOURCES)
-        set(ARG_SOURCES ${CMAKE_CURRENT_SOURCE_DIR})
-    endif()
-
-    set(command
-        ${CMAKE2MD_EXECUTABLE}
-        --template ${ARG_TEMPLATE}
-        --output ${ARG_OUTPUT}
-        ${ARG_EXTRA_ARGS}
-        ${ARG_SOURCES}
-    )
-    # The flag has to land after the executable rather than after the trailing
-    # source paths.
-    set(check_command ${command})
-    list(INSERT check_command 1 --check)
-
     set(all "")
     if(ARG_ALL)
         set(all ALL)
@@ -98,21 +71,21 @@ function(cmake2md_generate)
 
     add_custom_target(
         ${ARG_TARGET} ${all}
-        COMMAND ${command}
-        # The output is a source file, not a build artifact: it is committed,
-        # and generating it in the build tree would hide it from review.
+        COMMAND ${CMAKE2MD_EXECUTABLE}
+        # Where cmake2md.toml is looked for, and what the paths in it are
+        # relative to. The output is a source file, not a build artifact: it
+        # is committed, and writing it into the build tree would hide it from
+        # review.
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS ${ARG_SOURCES}
-        COMMENT "cmake2md: ${ARG_OUTPUT}"
+        COMMENT "cmake2md: ${ARG_TARGET}"
         VERBATIM
     )
 
     add_custom_target(
         ${ARG_TARGET}-check
-        COMMAND ${check_command}
+        COMMAND ${CMAKE2MD_EXECUTABLE} --check
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS ${ARG_SOURCES}
-        COMMENT "cmake2md: checking ${ARG_OUTPUT}"
+        COMMENT "cmake2md: checking ${ARG_TARGET}"
         VERBATIM
     )
 endfunction()
