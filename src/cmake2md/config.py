@@ -17,7 +17,6 @@ from the same place, so the two cannot drift apart.
 import dataclasses
 import pathlib
 from typing import Annotated
-from typing import Any
 
 import pydantic
 import tomli
@@ -188,27 +187,6 @@ class Settings:
             tags={name: tag.to_spec(name) for name, tag in raw.tags.items()},
         )
 
-    def as_arguments(self) -> dict[str, Any]:
-        """This settings' values under the names argparse holds them by.
-
-        Those are the field names above, underscored throughout: argparse's
-        `dest` for e.g. `--template-dir` is `template_dir`, not the dashed
-        flag spelling.
-        """
-        return {
-            'template': self.template,
-            'output': self.output,
-            'template_dir': self.template_dir,
-            'path': self.path,
-            'exclude': self.exclude,
-            'json': self.json,
-            'inject': self.inject,
-            'check': self.check,
-            'require_docs': self.require_docs,
-            'strict': self.strict,
-            'tags': self.tags,
-        }
-
 
 def find(start: pathlib.Path) -> pathlib.Path | None:
     """The nearest config file at or above `start`, if there is one.
@@ -250,24 +228,6 @@ def resolve(path: pathlib.Path | None) -> Settings:
     if path is None:
         return Settings.defaults()
     return Settings.resolve(_read_raw(path), root=path.parent)
-
-
-def load(path: pathlib.Path) -> dict[str, Any]:
-    """Read the settings `path` holds, which are the whole of it.
-
-    Only the settings the file actually names are returned: `cli` tells an
-    unsaid setting from one turned off on purpose by whether it is there at
-    all, so a default filled in here would beat an explicit --no-strict.
-
-    An empty result means the file says nothing, which is not an error: a
-    project may keep one for the sake of the tags alone.
-    """
-    raw = _read_raw(path)
-    settings = Settings.resolve(raw, root=path.parent).as_arguments()
-    written = {
-        JSON_SETTING if field == JSON_FIELD else field for field in raw.model_fields_set
-    }
-    return {name: value for name, value in settings.items() if name in written}
 
 
 def _setting_of(field: str) -> str:
