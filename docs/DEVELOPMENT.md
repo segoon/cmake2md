@@ -1,4 +1,4 @@
-# Developing cmake2md
+# Developing cmake2doc
 
 ```shell
 make install    # pip install -e '.[dev]'
@@ -31,12 +31,12 @@ Each module has one job, and they stack:
 | `checks.py` | Where the comment and the code disagree. |
 | `rendering.py` | The Jinja environment, the template search path and the filters. |
 | `serialize.py` | The same model as JSON. |
-| `config.py` | The `cmake2md.toml` a project keeps beside its CMake code. `Settings` is the one declaration of what the file may say; `cli` reads its defaults from the same model. |
+| `config.py` | The `cmake2doc.toml` a project keeps beside its CMake code. `Settings` is the one declaration of what the file may say; `cli` reads its defaults from the same model. |
 | `cli.py` | Arguments, the passes over the sources, and writing the output. |
 
 ## Adding a setting to the config file
 
-Add a field to `Settings` in `src/cmake2md/config.py` — its type is the check,
+Add a field to `Settings` in `src/cmake2doc/config.py` — its type is the check,
 its default is what `cli` fills in when nobody says otherwise — and add the
 matching option to `build_arg_parser()` with `default=None`, so that silence
 stays distinguishable from an explicit `--no-…`.
@@ -45,14 +45,14 @@ A field that names a file is annotated `AgainstConfigFile()`, which is what
 reads it relative to the config file rather than to the working directory.
 
 pydantic's own message never reaches the user: `_prose()` translates a
-`ValidationError` into cmake2md's voice, and `_WRONG_TYPE` is the table it
+`ValidationError` into cmake2doc's voice, and `_WRONG_TYPE` is the table it
 does it with. A new *kind* of error therefore needs a row there — without one
 the message falls back to pydantic's wording, which is a hint rather than a
 crash. Validators of ours raise `ValueError` with the final wording instead.
 
 ## Adding a tag
 
-The vocabulary lives in `TAG_SPECS` in `src/cmake2md/doc_parser.py`, as data:
+The vocabulary lives in `TAG_SPECS` in `src/cmake2doc/doc_parser.py`, as data:
 adding a tag is adding a row, and `Parser` names no tag of its own.
 
 A `TagSpec` says three things. **What the tag attaches to**, `TagTarget`:
@@ -82,7 +82,7 @@ A new parameter *kind* is the one genuinely large addition: it also needs
 `signature.py` to read it out of the code and `checks.py` to compare the two.
 
 A project that wants a tag of its own does not need any of this — it declares
-it in the `[tags]` table of `cmake2md.toml`, which builds the same `TagSpec`.
+it in the `[tags]` table of `cmake2doc.toml`, which builds the same `TagSpec`.
 
 ## Two rules the code keeps
 
@@ -91,7 +91,7 @@ exactly or not at all. A keyword list built from a variable, two
 `cmake_parse_arguments()` calls in one body, a macro reaching for `${ARGV0}`,
 an output variable whose name the caller supplies: each leaves the matching
 part of the signature `None`, and nothing about it is ever reported. A warning
-cmake2md prints is a real disagreement, so nobody has to learn to ignore them.
+cmake2doc prints is a real disagreement, so nobody has to learn to ignore them.
 
 **Nothing disappears silently.** A symbol whose group has no `@defgroup`
 behind it still gets rendered, under a heading of its own; a tag that is not

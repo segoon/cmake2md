@@ -1,9 +1,9 @@
 import pytest
 
-from cmake2md import checks
-from cmake2md import doc_parser
-from cmake2md import parse
-from cmake2md import tag_lexer
+from cmake2doc import checks
+from cmake2doc import doc_parser
+from cmake2doc import parse
+from cmake2doc import tag_lexer
 
 
 @pytest.fixture

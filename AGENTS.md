@@ -1,6 +1,6 @@
 # The product
 
-cmake2md is a documentation generator for cmake.
+cmake2doc is a documentation generator for cmake.
 It parses cmake source files, extracts doxygen-like comments,
 and uses jinja templates to generate final documentation.
 
@@ -16,7 +16,7 @@ and uses jinja templates to generate final documentation.
 * .github
 * Makefile
 * tests/
-* examples/ - a generic example of cmake2md user
+* examples/ - a generic example of cmake2doc user
 
 ## Python
 

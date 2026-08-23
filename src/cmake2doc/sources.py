@@ -10,7 +10,7 @@ from .errors import UsageError
 #: What a directory given as CMAKE_FILE is searched for.
 SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 #: File listing extra --exclude patterns, one per line, '#' starting a comment.
-IGNORE_FILE = '.cmake2mdignore'
+IGNORE_FILE = '.cmake2docignore'
 
 
 def _read_text(path: pathlib.Path) -> str:
@@ -21,7 +21,7 @@ def _read_text(path: pathlib.Path) -> str:
 
 
 def read_ignore_file(directory: pathlib.Path) -> list[str]:
-    """The patterns in `directory`/.cmake2mdignore, if there is one."""
+    """The patterns in `directory`/.cmake2docignore, if there is one."""
     path = directory / IGNORE_FILE
     if not path.is_file():
         return []
@@ -53,7 +53,7 @@ def collect_sources(
 
     A directory is searched, and a pattern expanded, because the shells that
     would otherwise do it (and Windows' do not) are not always in the picture:
-    cmake2md is typically run from a build system or a CI step.
+    cmake2doc is typically run from a build system or a CI step.
 
     A file reached twice — a directory and a glob both matching it, or the
     same file named twice on the command line — is read once: reading it

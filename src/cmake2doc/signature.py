@@ -2,7 +2,7 @@
 
 CMake states a definition's interface twice: once in the doc comment and once
 in the code, as the named arguments of ``function()`` and the keyword lists of
-``cmake_parse_arguments()``.  Reading the second one lets :mod:`cmake2md.checks`
+``cmake_parse_arguments()``.  Reading the second one lets :mod:`cmake2doc.checks`
 report when the two have drifted apart, and lets a template render what the
 author did not spell out.
 
@@ -37,5 +37,5 @@ class Signature:
 
 
 def unknown() -> Signature:
-    """A signature that says nothing, for code cmake2md cannot read."""
+    """A signature that says nothing, for code cmake2doc cannot read."""
     return Signature(accepts={kind: None for kind in ParamKind})

@@ -64,7 +64,7 @@ example_add_test(
 Looks up the version of a toolchain.
 
 The argument is named in the function() line and the result is set in the
-caller's scope, so cmake2md checks both against this comment.
+caller's scope, so cmake2doc checks both against this comment.
 
 ```
 example_toolchain_version(

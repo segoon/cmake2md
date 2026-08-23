@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cmake2md"
+name = "cmake2doc"
 dynamic = ["version"]
 description = "Documentation generator for CMake: extracts doxygen-like comments and renders them with Jinja templates"
 readme = "README.md"
@@ -54,21 +54,21 @@ dev = [
 ]
 
 [project.scripts]
-cmake2md = "cmake2md.cli:main"
+cmake2doc = "cmake2doc.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/segoon/cmake2md"
-Source = "https://github.com/segoon/cmake2md"
-Issues = "https://github.com/segoon/cmake2md/issues"
-Changelog = "https://github.com/segoon/cmake2md/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/segoon/cmake2doc"
+Source = "https://github.com/segoon/cmake2doc"
+Issues = "https://github.com/segoon/cmake2doc/issues"
+Changelog = "https://github.com/segoon/cmake2doc/blob/master/CHANGELOG.md"
 
-# Single source of truth for the version: cmake2md.__version__, which
+# Single source of truth for the version: cmake2doc.__version__, which
 # --version reports.
 [tool.hatch.version]
-path = "src/cmake2md/__init__.py"
+path = "src/cmake2doc/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cmake2md"]
+packages = ["src/cmake2doc"]
 
 # The sdist otherwise mirrors the repository, which would publish local
 # developer-tool state that is not part of the project.

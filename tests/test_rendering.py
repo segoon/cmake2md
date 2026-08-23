@@ -1,10 +1,10 @@
 import pytest
 
-from cmake2md import doc_parser
-from cmake2md import entries
-from cmake2md import rendering
-from cmake2md import tag_lexer
-from cmake2md.errors import UsageError
+from cmake2doc import doc_parser
+from cmake2doc import entries
+from cmake2doc import rendering
+from cmake2doc import tag_lexer
+from cmake2doc.errors import UsageError
 
 
 def item(

@@ -1,6 +1,6 @@
 import pytest
 
-from cmake2md.doc_parser import ParamKind
+from cmake2doc.doc_parser import ParamKind
 
 
 @pytest.fixture

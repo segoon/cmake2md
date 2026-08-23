@@ -1,4 +1,4 @@
-name: cmake2md
+name: cmake2doc
 description: Generate documentation from CMake sources, or check that it is up to date.
 branding:
   icon: file-text
@@ -7,13 +7,13 @@ branding:
 inputs:
   args:
     description: >-
-      The cmake2md command line, without the program name. For example:
+      The cmake2doc command line, without the program name. For example:
       "--template reference.md.jinja --output docs/reference.md ."
     required: true
   version:
-    description: Version of cmake2md to install, as a pip specifier.
+    description: Version of cmake2doc to install, as a pip specifier.
     required: false
-    default: cmake2md
+    default: cmake2doc
   python-version:
     description: Python to run it with.
     required: false
@@ -28,4 +28,4 @@ runs:
     - shell: bash
       run: pip install "${{ inputs.version }}"
     - shell: bash
-      run: cmake2md ${{ inputs.args }}
+      run: cmake2doc ${{ inputs.args }}

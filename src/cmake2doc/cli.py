@@ -42,7 +42,7 @@ STDOUT = config.STDOUT
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='cmake2md',
+        prog='cmake2doc',
         description=(
             'Generate documentation from CMake sources by extracting '
             'doxygen-like comments and rendering them with Jinja templates.'
@@ -51,7 +51,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--version',
         action='version',
-        version=f'cmake2md {__version__}',
+        version=f'cmake2doc {__version__}',
         help='Show the version and exit.',
     )
     parser.add_argument(
@@ -171,7 +171,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def find_config(config_arg: str | None, cwd: pathlib.Path) -> pathlib.Path | None:
     """The config file this run reads: `--config`'s value if given, else
-    the nearest cmake2md.toml at or above `cwd`.
+    the nearest cmake2doc.toml at or above `cwd`.
     """
     if config_arg is None:
         return config.find(cwd)
@@ -372,10 +372,10 @@ def main(argv: Sequence[str] | None = None, cwd: pathlib.Path | None = None) -> 
     try:
         return run(args, cwd if cwd is not None else pathlib.Path.cwd())
     except Cmake2mdError as exc:
-        print(f'cmake2md: error: {exc}', file=sys.stderr)
+        print(f'cmake2doc: error: {exc}', file=sys.stderr)
         return 1
     except jinja2.TemplateError as exc:
-        print(f'cmake2md: template error: {exc}', file=sys.stderr)
+        print(f'cmake2doc: template error: {exc}', file=sys.stderr)
         return 1
 
 

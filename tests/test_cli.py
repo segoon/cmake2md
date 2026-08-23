@@ -4,9 +4,9 @@ from unittest import mock
 
 import pytest
 
-from cmake2md import cli
-from cmake2md import config
-from cmake2md.errors import UsageError
+from cmake2doc import cli
+from cmake2doc import config
+from cmake2doc.errors import UsageError
 
 TEMPLATE = """\
 {% for symbol in symbols %}
@@ -89,12 +89,12 @@ def test_builtin_template_is_usable_by_name(cmake_file, tmp_path):
 
 
 def test_version_is_printed(capsys):
-    from cmake2md import __version__
+    from cmake2doc import __version__
 
     with pytest.raises(SystemExit) as exc:
         run('--version')
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == f'cmake2md {__version__}'
+    assert capsys.readouterr().out.strip() == f'cmake2doc {__version__}'
 
 
 def test_unknown_template_says_where_it_looked(cmake_file, tmp_path, capsys):
@@ -818,7 +818,7 @@ def test_exclude_matches_a_bare_file_name_too(template, tmp_path):
 
 
 def test_ignore_file_adds_exclusions(template, tmp_path):
-    (tmp_path / '.cmake2mdignore').write_text(
+    (tmp_path / '.cmake2docignore').write_text(
         '# what CI does not document\ntest_*.cmake\n', encoding='utf-8'
     )
     (tmp_path / 'a.cmake').write_text(
@@ -1198,7 +1198,7 @@ def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path):
 @pytest.mark.parametrize(
     'tags, message',
     [
-        ('note = { label = "x" }\n', '@note is already a tag of cmake2md'),
+        ('note = { label = "x" }\n', '@note is already a tag of cmake2doc'),
         ('author = { text = "none" }\n', 'text must be one of paragraph, block'),
         ('author = { nosuch = 1 }\n', 'has no setting called nosuch'),
         ('author = "paragraph"\n', 'author must be a table'),
@@ -1216,7 +1216,7 @@ def test_a_doubtful_tag_declaration_is_a_usage_error(tags, message, tmp_path, ca
 
 
 def test_the_shipped_cmake_module_documents_itself(tmp_path):
-    # The module is written with cmake2md's own tags, so it is both the
+    # The module is written with cmake2doc's own tags, so it is both the
     # integration point and a worked example; strict keeps the two honest.
     root = pathlib.Path(__file__).resolve().parent.parent
     out = tmp_path / 'module.md'
@@ -1226,12 +1226,12 @@ def test_the_shipped_cmake_module_documents_itself(tmp_path):
             'reference.md.jinja',
             '-o',
             out,
-            root / 'cmake' / 'cmake2md.cmake',
+            root / 'cmake' / 'cmake2doc.cmake',
         )
         == 0
     )
     text = out.read_text(encoding='utf-8')
-    assert '## cmake2md_generate' in text
+    assert '## cmake2doc_generate' in text
     assert '**TARGET <value>** the name of the target to add' in text
     # The verifying target is derived from TARGET, not asked for by an option.
     assert 'CHECK' not in text

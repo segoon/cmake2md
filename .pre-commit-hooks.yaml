@@ -4,19 +4,19 @@
 # generated documentation is out of date and shows what differs, leaving the
 # regeneration to the author. The write hook regenerates instead, so the
 # commit picks the new documentation up.
-- id: cmake2md-check
-  name: cmake2md (check documentation is up to date)
+- id: cmake2doc-check
+  name: cmake2doc (check documentation is up to date)
   description: Fail when generated CMake documentation is out of date.
-  entry: cmake2md --check
+  entry: cmake2doc --check
   language: python
   files: (CMakeLists\.txt|\.cmake)$
   pass_filenames: false
   require_serial: true
 
-- id: cmake2md
-  name: cmake2md (regenerate documentation)
+- id: cmake2doc
+  name: cmake2doc (regenerate documentation)
   description: Regenerate documentation from CMake sources.
-  entry: cmake2md
+  entry: cmake2doc
   language: python
   files: (CMakeLists\.txt|\.cmake)$
   pass_filenames: false

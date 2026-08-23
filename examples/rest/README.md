@@ -7,7 +7,7 @@ point: the built-in is named rather than written.
 From the repository root:
 
 ```shell
-cmake2md \
+cmake2doc \
     --template reference.rst.jinja \
     --output examples/rest/reference.rst \
     examples/rest/CMakeLists.txt

@@ -1,7 +1,7 @@
 import pytest
 
-from cmake2md import parse
-from cmake2md.errors import Cmake2mdError
+from cmake2doc import parse
+from cmake2doc.errors import Cmake2mdError
 
 
 @pytest.fixture
@@ -220,7 +220,7 @@ def test_a_bracket_comment_with_crlf_line_endings_has_no_stray_carriage_return(
     parsed,
 ):
     # A source file with Windows line endings is not unusual to encounter
-    # regardless of which OS cmake2md itself runs on; split('\n') used to
+    # regardless of which OS cmake2doc itself runs on; split('\n') used to
     # leave a trailing '\r' on every line but the last.
     symbol = parse.extract_symbols(
         parsed(

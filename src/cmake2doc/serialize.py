@@ -1,6 +1,6 @@
 """The parsed model as JSON, for the tools that are not Jinja templates.
 
-Templates are the usual way out of cmake2md, but a documentation site
+Templates are the usual way out of cmake2doc, but a documentation site
 generator, a linter or a diff tool wants the model itself.  This is that
 model, written as it is handed to a template, with a version on it so a
 consumer can tell when it has changed underneath.

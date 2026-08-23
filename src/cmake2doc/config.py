@@ -1,10 +1,10 @@
-"""The ``cmake2md.toml`` a project keeps beside its CMake code.
+"""The ``cmake2doc.toml`` a project keeps beside its CMake code.
 
 A CI step that renders three templates needs six paired arguments to say so,
 and they have to be kept in step across a Makefile, a workflow file and a
 pre-commit hook.  A config file says it once.
 
-The settings are the whole file: it is cmake2md's own, so it needs no table
+The settings are the whole file: it is cmake2doc's own, so it needs no table
 to say whose settings these are.  A relative path in it is relative to the
 file, which is the only reading that survives being run from a subdirectory.
 
@@ -30,7 +30,7 @@ from .errors import UsageError
 #: resolved against the config file (`_against`) knows to leave it alone.
 STDOUT = '-'
 #: The file the settings live in, looked for from the working directory up.
-DEFAULT_FILE = 'cmake2md.toml'
+DEFAULT_FILE = 'cmake2doc.toml'
 #: What stops that search: past a repository, the file would not be this
 #: project's own any more.
 ROOT_MARKERS = ('.git',)
@@ -53,7 +53,7 @@ def _check_tag_name(name: str) -> str:
             '@ and a letter or _, then letters, digits and _'
         )
     if name in doc_parser.TAG_SPECS:
-        raise ValueError(f'@{name} is already a tag of cmake2md')
+        raise ValueError(f'@{name} is already a tag of cmake2doc')
     return name
 
 
@@ -104,7 +104,7 @@ class TagSettings(pydantic.BaseModel):
 
 
 class _RawSettings(pydantic.BaseModel):
-    """What cmake2md.toml literally says, before any path in it is resolved.
+    """What cmake2doc.toml literally says, before any path in it is resolved.
 
     Anything else in it is a mistake worth pointing out rather than ignoring,
     which is what `extra='forbid'` says.  Every setting is also a long option,
@@ -137,7 +137,7 @@ class _RawSettings(pydantic.BaseModel):
 
 @dataclasses.dataclass(frozen=True)
 class Settings:
-    """A cmake2md.toml file's settings, with every path in it resolved
+    """A cmake2doc.toml file's settings, with every path in it resolved
     against the file's own directory — the only reading that survives being
     run from a subdirectory.  Built once, by `resolve()`, from a
     `_RawSettings` — which is only what pydantic validated, paths exactly as
@@ -158,7 +158,7 @@ class Settings:
 
     @classmethod
     def defaults(cls) -> 'Settings':
-        """cmake2md's own defaults: nothing read from a file, so nothing to
+        """cmake2doc's own defaults: nothing read from a file, so nothing to
         resolve — `root` is never touched, since every default is empty or
         None.
         """
@@ -167,7 +167,7 @@ class Settings:
     @classmethod
     def resolve(cls, raw: _RawSettings, root: pathlib.Path) -> 'Settings':
         """Read `raw` the way `root`, the config file's own directory, makes
-        every path in it read the same regardless of where cmake2md was run
+        every path in it read the same regardless of where cmake2doc was run
         from.
         """
         return cls(
@@ -206,7 +206,7 @@ def find(start: pathlib.Path) -> pathlib.Path | None:
 
 
 def _read_raw(path: pathlib.Path) -> _RawSettings:
-    """Validate `path` as a cmake2md.toml, or say what's wrong with it."""
+    """Validate `path` as a cmake2doc.toml, or say what's wrong with it."""
     try:
         data: dict[str, object] = tomli.loads(path.read_text(encoding='utf-8'))
     except OSError as exc:
@@ -222,7 +222,7 @@ def _read_raw(path: pathlib.Path) -> _RawSettings:
 
 def resolve(path: pathlib.Path | None) -> Settings:
     """`path`'s settings, every field resolved — the file's own value where
-    it named one, cmake2md's own default otherwise — or cmake2md's own
+    it named one, cmake2doc's own default otherwise — or cmake2doc's own
     defaults outright when there is no file at all.
     """
     if path is None:
@@ -268,7 +268,7 @@ _WRONG_TYPE = {
 def _prose(
     path: pathlib.Path, exc: pydantic.ValidationError, data: dict[str, object]
 ) -> str:
-    """The first thing wrong with the file, said the way cmake2md says things.
+    """The first thing wrong with the file, said the way cmake2doc says things.
 
     Only the first: a file with two mistakes in it is fixed one at a time, and
     a wall of them buries the one being looked at.
@@ -312,7 +312,7 @@ def _prose(
 def _against(root: pathlib.Path, value: str, only_if_file: bool = False) -> str:
     """Read a path the config file gives as relative to the file itself.
 
-    Anything else would depend on where cmake2md happened to be run from,
+    Anything else would depend on where cmake2doc happened to be run from,
     which is exactly what a config file at the project root is there to stop
     mattering.  `STDOUT` is not a path at all, and must be left alone:
     resolving it against a directory would create a file called `-` instead

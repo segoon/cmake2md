@@ -1,7 +1,7 @@
-# An example project showing what cmake2md reads.
+# An example project showing what cmake2doc reads.
 #
 # Render it with:
-#   cmake2md --template examples/md/reference.md.jinja \
+#   cmake2doc --template examples/md/reference.md.jinja \
 #            --output examples/md/reference.md \
 #            examples/md/CMakeLists.txt
 
@@ -83,7 +83,7 @@ endfunction()
 # Looks up the version of a toolchain.
 #
 # The argument is named in the function() line and the result is set in the
-# caller's scope, so cmake2md checks both against this comment.
+# caller's scope, so cmake2doc checks both against this comment.
 #
 # @arg NAME the toolchain to look up
 # @set_parent_scope EXAMPLE_TOOLCHAIN_VERSION the version that was found
