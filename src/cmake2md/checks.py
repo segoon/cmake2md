@@ -45,17 +45,25 @@ def check(
 ) -> list[DocWarning]:
     """Report where `doc` disagrees with the code it documents.
 
-    An item whose parameters are not documented at all is left alone: it is
-    not drifting, it is simply undocumented, which is a separate question.
+    A symbol with no doc comment at all is left alone: it is not drifting, it
+    is simply undocumented, which is a separate question (--require-docs).
+    One documented with only a @brief and no parameters at all is still
+    checked against its own code: a keyword the body accepts is missing from
+    the comment either way, whether or not another keyword happens to be
+    documented already.
     """
     warnings = _broken_examples(doc)
     warnings += _group_problems(item, doc, groups)
     warnings += _misplaced_file_tag(item, doc)
-    if isinstance(item, parse.Symbol) and doc.all_params():
+    if isinstance(item, parse.Symbol) and _has_comment(item):
         warnings += _duplicate_params(doc)
         warnings += _params_the_code_denies(item, doc)
         warnings += _params_the_comment_omits(item, doc)
     return warnings
+
+
+def _has_comment(item: parse.Documented) -> bool:
+    return any(line.strip() for line in item.comments)
 
 
 def cmake_snippets(text: str) -> list[str]:

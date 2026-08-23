@@ -209,7 +209,9 @@ about. A keyword list built from a variable, a body with two
 `cmake_parse_arguments()` calls in it, a macro that reaches for `${ARGV0}`, or
 an output variable whose name the caller supplies
 (`set(${ARG_OUTPUT_VARIABLE} ... PARENT_SCOPE)`) all leave the matching tags
-unchecked. Symbols with no doc comment at all are not reported either.
+unchecked. A symbol with no doc comment at all is not reported either — that
+is what `--require-docs` is for — but one documented at all, even with no
+parameter mentioned yet, is checked against its own code from the start.
 
 An `@example` is checked the same way: it is CMake, so cmake2md parses it and
 reports a sample that does not parse. Prose or another language belongs in a

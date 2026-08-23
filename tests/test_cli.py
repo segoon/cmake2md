@@ -420,7 +420,9 @@ def test_the_signature_is_available_to_templates(tmp_path):
         encoding='utf-8',
     )
     out = tmp_path / 'out.md'
-    assert run('-t', sig_template, '-o', out, source) == 0
+    # --no-strict: the comment doesn't document QUIET, which is beside what
+    # this test is about.
+    assert run('--no-strict', '-t', sig_template, '-o', out, source) == 0
     assert out.read_text(encoding='utf-8').strip() == "['QUIET']"
 
 

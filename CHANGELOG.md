@@ -39,6 +39,11 @@
 - `--json` no longer needs a `--template`/`--output` pair alongside it; a
   consumer that wants only the parsed model no longer has to invent a
   throwaway one.
+- A symbol documented with no parameter at all — a `@brief` alone, say — is
+  now checked against its own code from the start, instead of only once its
+  author documented at least one parameter of it. A function whose comment
+  names none of the keywords `cmake_parse_arguments()` accepts used to be
+  compared against nothing at all.
 
 ### Added
 

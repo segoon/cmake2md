@@ -155,14 +155,36 @@ def test_a_kind_the_code_does_not_declare_is_left_alone(messages):
     )
 
 
-def test_a_symbol_with_no_parameters_documented_is_left_alone(messages):
-    assert messages('# Adds a thing.\nfunction(f NAME)\nendfunction()\n') == []
+def test_a_documented_symbol_with_no_parameters_documented_is_still_checked(messages):
+    # A comment with no parameter at all is still a comment; the blind spot
+    # this used to leave was that a symbol stayed unchecked until its author
+    # documented at least one parameter of it.
+    assert messages('# Adds a thing.\nfunction(f NAME)\nendfunction()\n') == [
+        'f takes NAME but it is not documented; add @arg NAME'
+    ]
+
+
+def test_a_symbol_with_no_comment_at_all_is_left_alone(symbols_of):
+    # Undocumented is a separate question from drifting; that one is
+    # --require-docs.
+    symbol = symbols_of('function(f NAME)\nendfunction()\n')[0]
+    doc = doc_parser.parse(tag_lexer.tokenize(symbol.comments))
+    assert checks.check(symbol, doc) == []
 
 
 def test_file_tag_on_a_symbol_is_reported(messages):
     # @file documents a comment block as a whole; on a function it would
-    # silently do nothing, since the block never reaches `files`.
-    assert messages(documented('@file')) == [
+    # silently do nothing, since the block never reaches `files`. The other
+    # tags keep the parameters fully documented, to isolate this message from
+    # the parameter cross-check.
+    assert messages(
+        documented(
+            '@file',
+            '@option QUIET be quiet',
+            '@param TIMEOUT seconds',
+            '@multiparam SOURCES the sources',
+        )
+    ) == [
         '@file in the documentation of add_thing documents nothing; a file '
         'is documented by a comment block of its own'
     ]
