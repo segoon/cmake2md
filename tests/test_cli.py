@@ -125,21 +125,40 @@ def test_check_reports_missing_output(cmake_file, template, tmp_path):
     assert not out.exists()
 
 
-def test_unknown_tag_warns_but_succeeds(template, tmp_path, capsys):
+UNKNOWN_TAG_SOURCE = """\
+# @nosuchtag
+function(f)
+endfunction()
+"""
+
+
+@pytest.fixture
+def unknown_tag(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
-    source.write_text('# @nosuchtag\nfunction(f)\nendfunction()\n', encoding='utf-8')
-    out = tmp_path / 'out.md'
-    assert run('-t', template, '-o', out, source) == 0
+    source.write_text(UNKNOWN_TAG_SOURCE, encoding='utf-8')
+    return source
+
+
+def test_unknown_tag_warns_but_succeeds_without_strict(
+    template, unknown_tag, tmp_path, capsys
+):
+    assert (
+        run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 0
+    )
     err = capsys.readouterr().err
     assert 'unknown tag @nosuchtag' in err
-    assert str(source) in err
+    assert str(unknown_tag) in err
 
 
-def test_strict_rejects_unknown_tags(template, tmp_path, capsys):
-    source = tmp_path / 'CMakeLists.txt'
-    source.write_text('# @nosuchtag\nfunction(f)\nendfunction()\n', encoding='utf-8')
-    out = tmp_path / 'out.md'
-    assert run('--strict', '-t', template, '-o', out, source) == 1
+def test_strict_rejects_unknown_tags(template, unknown_tag, tmp_path, capsys):
+    assert run('--strict', '-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 1
+    assert 'unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_unknown_tag_is_rejected_by_default(template, unknown_tag, tmp_path, capsys):
+    # Strict is what a run does unless told otherwise: a documentation problem
+    # nobody is made to look at is a documentation problem nobody fixes.
+    assert run('-t', template, '-o', tmp_path / 'out.md', unknown_tag) == 1
     assert 'unknown tag @nosuchtag' in capsys.readouterr().err
 
 
@@ -174,7 +193,7 @@ def test_warning_points_at_the_line_the_tag_is_on(template, tmp_path, capsys):
         'function(f)\nendfunction()\n',
         encoding='utf-8',
     )
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
     assert f'{source}:2: function f: warning:' in capsys.readouterr().err
 
 
@@ -192,7 +211,7 @@ endfunction()
 def test_documentation_disagreeing_with_the_code_warns(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(MISMATCHED_SOURCE, encoding='utf-8')
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
 
     err = capsys.readouterr().err
     assert f'{source}:4: function add_thing: warning: SRCS is documented' in err
@@ -278,7 +297,7 @@ def test_ingroup_naming_an_undefined_group_warns(template, tmp_path, capsys):
     source.write_text(
         GROUPED_SOURCE + '\n# @ingroup nosuch\noption(B "d" ON)\n', encoding='utf-8'
     )
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
     assert '@ingroup nosuch names a group that no @defgroup defines' in (
         capsys.readouterr().err
     )
@@ -297,7 +316,7 @@ def test_defgroup_on_a_symbol_is_reported(template, tmp_path, capsys):
         '# @defgroup build Build targets\nfunction(f)\nendfunction()\n',
         encoding='utf-8',
     )
-    assert run('-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
     assert 'defines nothing; a group is defined in a comment block' in (
         capsys.readouterr().err
     )
@@ -847,14 +866,41 @@ def test_a_dash_in_a_setting_name_reads_as_an_underscore(
     assert 'undocumented' in capsys.readouterr().err
 
 
+def test_no_strict_on_the_command_line_beats_the_config_file(
+    unknown_tag, tmp_path, monkeypatch, capsys
+):
+    # A flag turned off explicitly is not the same as a flag left unsaid; the
+    # file only fills in what the command line did not say.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
+        'output = "out.md"\npath = "."\nstrict = true\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict') == 0
+    assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
+
+
+def test_the_config_file_can_turn_strict_off(
+    unknown_tag, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
+        'output = "out.md"\npath = "."\nstrict = false\n',
+        encoding='utf-8',
+    )
+    assert run() == 0
+    assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
+
+
 def test_the_shipped_cmake_module_documents_itself(tmp_path):
     # The module is written with cmake2md's own tags, so it is both the
-    # integration point and a worked example; --strict keeps the two honest.
+    # integration point and a worked example; strict keeps the two honest.
     root = pathlib.Path(__file__).resolve().parent.parent
     out = tmp_path / 'module.md'
     assert (
         run(
-            '--strict',
             '-t',
             'reference.md.jinja',
             '-o',

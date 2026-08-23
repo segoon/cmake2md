@@ -42,7 +42,7 @@ documentation that shows up in every diff. Ask for one by name, or pass ALL.
 @param OUTPUT @required the file to write
 @multiparam SOURCES the CMake files to read; the current source directory
     when none are given
-@multiparam EXTRA_ARGS further arguments for cmake2md, such as --strict
+@multiparam EXTRA_ARGS further arguments for cmake2md, such as --require-docs
 @option ALL build TARGET as part of the default build
 
 @example

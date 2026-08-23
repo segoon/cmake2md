@@ -31,6 +31,22 @@ SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 #: File listing extra --exclude patterns, one per line, '#' starting a comment.
 IGNORE_FILE = '.cmake2mdignore'
 
+#: What each optional argument is worth when neither the command line nor the
+#: config file says.  argparse leaves them all None instead, so that silence is
+#: told apart from an explicit --no-strict, which the config file must not win
+#: over.
+DEFAULTS: dict[str, list[str] | bool] = {
+    'template': [],
+    'output': [],
+    'template_dir': [],
+    'exclude': [],
+    'path': [],
+    'inject': False,
+    'check': False,
+    'require_docs': False,
+    'strict': True,
+}
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -50,7 +66,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '-t',
         '--template',
         action='append',
-        default=[],
+        default=None,
         metavar='TEMPLATE',
         help=(
             'Jinja template to render; either a path or the name of a '
@@ -61,7 +77,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '-o',
         '--output',
         action='append',
-        default=[],
+        default=None,
         metavar='OUTPUT',
         help='Where to write the corresponding --template. Repeatable.',
     )
@@ -69,7 +85,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '-I',
         '--template-dir',
         action='append',
-        default=[],
+        default=None,
         metavar='DIR',
         help='Additional directory to search for templates. Repeatable.',
     )
@@ -86,6 +102,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--inject',
         action='store_true',
+        default=None,
         help=(
             'Write into an existing --output file, between its '
             f'{rendering.INJECT_BEGIN} and {rendering.INJECT_END} lines, '
@@ -103,7 +120,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--exclude',
         action='append',
-        default=[],
+        default=None,
         metavar='PATTERN',
         help=(
             'Skip source files matching this glob, against either the whole '
@@ -113,6 +130,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--require-docs',
         action='store_true',
+        default=None,
         help=(
             'Exit non-zero if a public function() or macro() carries no doc '
             'comment. A name starting with _ is private and is not required '
@@ -121,15 +139,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--strict',
-        action='store_true',
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help=(
-            'Treat documentation warnings as errors: a doubtful @tag, and a '
-            'doc comment that disagrees with the code it documents.'
+            'Treat documentation problems as errors: a doubtful @tag, and a '
+            'doc comment that disagrees with the code it documents. On by '
+            'default; --no-strict reports them as warnings and carries on.'
         ),
     )
     parser.add_argument(
         '--check',
         action='store_true',
+        default=None,
         help=(
             'Do not write anything; exit non-zero if any output is missing '
             'or differs from what is already on disk.'
@@ -143,6 +164,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         'path',
         nargs='*',
+        default=None,
         metavar='CMAKE_FILE',
         help=(
             'CMake sources to read: files, directories to search for '
@@ -169,10 +191,20 @@ def apply_config(args: argparse.Namespace) -> None:
 
     for key, value in config.load(path).items():
         current = getattr(args, key, None)
-        # A list argument that was not given is empty, and a flag is False;
-        # either way, nothing was said on the command line.
-        if not current:
+        # Nothing was said on the command line: None for a flag, and either
+        # None or empty for a list, which argparse fills in for a positional.
+        # False is not the same as unsaid — the file must not win over an
+        # explicit --no-strict.
+        if current is None or current == []:
             setattr(args, key, value)
+
+
+def apply_defaults(args: argparse.Namespace) -> None:
+    """Settle whatever neither the command line nor the config file said."""
+    for key, value in DEFAULTS.items():
+        if getattr(args, key, None) is None:
+            # A copy: the default list must not be shared between runs.
+            setattr(args, key, list(value) if isinstance(value, list) else value)
 
 
 def validate_args(args: argparse.Namespace) -> list[tuple[str, str]]:
@@ -417,6 +449,7 @@ def run(args: argparse.Namespace) -> int:
         return list_templates()
 
     apply_config(args)
+    apply_defaults(args)
     pairs = validate_args(args)
 
     specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]

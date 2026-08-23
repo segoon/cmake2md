@@ -93,7 +93,12 @@
 - `--check` prints a diff of what differs instead of only reporting that
   something does.
 - `--strict` now promotes every documentation warning to an error, not only a
-  doubtful `@tag`.
+  doubtful `@tag`, and it is what a run does by default: a documentation
+  problem nobody is made to look at is a documentation problem nobody fixes.
+  `--no-strict`, or `strict = false` in the config file, reports them as
+  warnings and carries on.
+- A flag turned off on the command line now beats the config file, which used
+  to win over it because "off" and "unsaid" were the same value.
 
 ## 0.1.0 (2026-08-22)
 

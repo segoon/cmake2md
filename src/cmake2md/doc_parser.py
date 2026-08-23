@@ -5,9 +5,10 @@ register it in :data:`TAG_SPECS` and handle it in ``Parser._handle_tag``.
 
 A doubtful '@' — an unregistered tag, or a registered one that is not
 followed by something name-shaped — is left in the description as written
-and only warned about, so that prose mentioning a tag does not break a
-documentation build.  ``--strict`` turns those warnings into errors.  A
-registered tag with *nothing* at all after it stays an error either way.
+and reported, so that a template still has something to render.  Whether the
+report is fatal is the caller's ``strict``, which the command line has on
+unless ``--no-strict`` says otherwise.  A registered tag with *nothing* at
+all after it stays an error either way.
 """
 
 import dataclasses

@@ -122,16 +122,17 @@ An `@` only starts a tag at the beginning of a line or after whitespace, so
 start of a word — for instance when prose mentions a tag, as in
 `not tagged with @@ingroup`.
 
-Two things are left in the text and reported as warnings rather than acted on:
-a tag cmake2md does not recognise, and a known tag that is not followed by
-something that looks like a name (`@ingroup, so …` is prose, not a group named
-`,`). Pass `--strict` to turn both into errors.
+Two things are left in the text and reported rather than acted on: a tag
+cmake2md does not recognise, and a known tag that is not followed by something
+that looks like a name (`@ingroup, so …` is prose, not a group named `,`).
+Both fail the run; pass `--no-strict` to have them reported as warnings and
+carry on.
 
 ### Checking the comment against the code
 
 A CMake function states its interface twice — once in the doc comment, once in
 its own body — and the two drift apart. cmake2md reads the second one and
-reports the disagreement:
+fails the run on the disagreement:
 
 ```cmake
 # @option QUIET be quiet
@@ -140,6 +141,13 @@ function(example_add_library)
     cmake_parse_arguments(ARG "QUIET" "" "SOURCES" ${ARGN})
 endfunction()
 ```
+
+```
+cmake2md: error: CMakeLists.txt:2: function example_add_library: SRCS is
+documented as @multiparam but example_add_library does not accept it
+```
+
+Under `--no-strict` the run carries on and every disagreement is reported:
 
 ```
 CMakeLists.txt:2: function example_add_library: warning: SRCS is documented as
@@ -168,7 +176,7 @@ An `@example` is checked the same way: it is CMake, so cmake2md parses it and
 reports a sample that does not parse. Prose or another language belongs in a
 fenced code block, which is left alone unless it is fenced as `cmake`.
 
-`--strict` turns these warnings into errors as well.
+`--no-strict` demotes these to warnings as well.
 
 ### Adding a tag
 
@@ -305,7 +313,7 @@ document, listing every documented symbol and nothing else.
 ```
 cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
          [--json OUTPUT] [--exclude PATTERN]... [--require-docs]
-         [--strict] [--check] CMAKE_FILE...
+         [--no-strict] [--check] CMAKE_FILE...
 ```
 
 | Flag | Effect |
@@ -318,7 +326,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
 | `--require-docs` | Exit non-zero if a public `function()` or `macro()` has no doc comment. |
-| `--strict` | Treat documentation warnings as errors: a doubtful `@tag`, or a comment that disagrees with the code. |
+| `--no-strict` | Report documentation problems — a doubtful `@tag`, or a comment that disagrees with the code — as warnings rather than failing the run, which is what it does by default. |
 | `--check` | Write nothing; exit non-zero if any output is missing or stale. |
 | `--list-templates` | List the built-in template names and exit. |
 | `--version` | Print the version and exit. |
@@ -351,13 +359,15 @@ pre-commit hook. Say it once instead, in `pyproject.toml`:
 template = ["reference.md.jinja"]
 output = ["docs/reference.md"]
 path = ["."]
-strict = true
+require-docs = true
 ```
 
 and the CI step is `cmake2md` with nothing after it. Every long option has a
 setting of the same name, with `-` or `_` between words, and a lone string is
 accepted where a list belongs. Anything given on the command line wins over
-the file, so `cmake2md --output - .` still prints to the terminal.
+the file, so `cmake2md --output - .` still prints to the terminal — and a flag
+turned off explicitly counts as given, so `--no-strict` wins over a
+`strict = true` in the file.
 
 `pyproject.toml` is read when it has a `[tool.cmake2md]` table; `--config`
 names a different file, which must then exist.
@@ -413,7 +423,7 @@ cmake2md_generate(
     # The CMake files to read; the current source directory when omitted.
     SOURCES cmake/helpers.cmake
     # Anything else cmake2md takes.
-    EXTRA_ARGS --strict
+    EXTRA_ARGS --require-docs
     # Build `docs` as part of the default build.
     ALL
 )
@@ -443,7 +453,7 @@ A GitHub Action:
 ```yaml
 - uses: segoon/cmake2md@v0.1.0
   with:
-    args: --check --strict --template reference.md.jinja --output docs/reference.md .
+    args: --check --template reference.md.jinja --output docs/reference.md .
 ```
 
 ## Development
