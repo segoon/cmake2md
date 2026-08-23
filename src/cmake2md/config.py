@@ -55,6 +55,9 @@ class AgainstConfigFile:
     """
 
     only_if_file: bool = False
+    #: Whether the setting holds a StrList rather than a single path, so
+    #: `load()` knows to resolve every item without inspecting the value.
+    is_list: bool = False
 
 
 def _check_tag_name(name: str) -> str:
@@ -129,10 +132,12 @@ class Settings(pydantic.BaseModel):
         extra='forbid', alias_generator=_dashed, populate_by_name=True
     )
 
-    template: Annotated[StrList, AgainstConfigFile(only_if_file=True)] = []
-    output: Annotated[StrList, AgainstConfigFile()] = []
-    template_dir: Annotated[StrList, AgainstConfigFile()] = []
-    path: Annotated[StrList, AgainstConfigFile()] = []
+    template: Annotated[
+        StrList, AgainstConfigFile(only_if_file=True, is_list=True)
+    ] = []
+    output: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
+    template_dir: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
+    path: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
     #: Not a path but a glob matched against one, so it is left as written.
     exclude: StrList = []
     #: Trailing underscore because a field called `json` shadows a method of
@@ -212,7 +217,11 @@ def load(path: pathlib.Path) -> dict[str, Any]:
         field = Settings.model_fields[_field_of(name)]
         for mark in field.metadata:
             if isinstance(mark, AgainstConfigFile):
-                settings[name] = _against(root, value, mark.only_if_file)
+                settings[name] = (
+                    [_against(root, item, mark.only_if_file) for item in value]
+                    if mark.is_list
+                    else _against(root, value, mark.only_if_file)
+                )
     return settings
 
 
@@ -298,17 +307,16 @@ def _prose(
     return f'{where} {at} {what}' if at else f'{where} {what}'
 
 
-def _against(root: pathlib.Path, value: Any, only_if_file: bool = False) -> Any:
+def _against(root: pathlib.Path, value: str, only_if_file: bool = False) -> str:
     """Read a path the config file gives as relative to the file itself.
 
     Anything else would depend on where cmake2md happened to be run from,
     which is exactly what a config file at the project root is there to stop
     mattering.  `STDOUT` is not a path at all, and must be left alone:
     resolving it against a directory would create a file called `-` instead
-    of writing to standard output.
+    of writing to standard output.  Called once per item of a StrList
+    setting, and once for a lone one, per `AgainstConfigFile.is_list`.
     """
-    if isinstance(value, list):
-        return [_against(root, item, only_if_file) for item in value]
     if value == STDOUT:
         return value
     resolved = root / value
