@@ -180,10 +180,12 @@ fenced code block, which is left alone unless it is fenced as `cmake`.
 
 ### Adding a tag
 
-The vocabulary is deliberately small and lives in one place:
+The vocabulary is deliberately small and lives in one place, as data:
 `TAG_SPECS` in
-[`src/cmake2md/doc_parser.py`](https://github.com/segoon/cmake2md/blob/master/src/cmake2md/doc_parser.py).
-Register the tag there and handle it in `Parser._handle_tag`.
+[`src/cmake2md/doc_parser.py`](https://github.com/segoon/cmake2md/blob/master/src/cmake2md/doc_parser.py),
+where each tag declares what it attaches to — a parameter, a section, a field
+of the comment, a field of the parameter above it. Adding one is adding a row;
+[DEVELOPMENT.md](DEVELOPMENT.md) has the table.
 
 ## Writing templates
 

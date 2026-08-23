@@ -1,7 +1,10 @@
 """Turns a tag stream into a structured :class:`DocComment`.
 
-This is the single place that knows the tag vocabulary.  To add a tag,
-register it in :data:`TAG_SPECS` and handle it in ``Parser._handle_tag``.
+This is the single place that knows the tag vocabulary, and it knows it as
+data: :data:`TAG_SPECS` says of every tag what it attaches its result to — a
+parameter, a section, a field of the comment, a field of the parameter above
+it — and :class:`Parser` has one arm for each of those and no tag name of its
+own.  Adding a tag is adding a row.
 
 A doubtful '@' — an unregistered tag, or a registered one that is not
 followed by something name-shaped — is left in the description as written
@@ -14,6 +17,7 @@ all after it stays an error either way.
 import dataclasses
 import enum
 import re
+from collections.abc import Mapping
 from collections.abc import Sequence
 
 from . import tag_lexer
@@ -44,19 +48,47 @@ class TagText(enum.Enum):
     Block = 'block'
 
 
+class TagTarget(enum.Enum):
+    """What a tag attaches its result to."""
+
+    #: A parameter of the definition, of the ParamKind the tag is named after.
+    Param = 'param'
+    #: A section of the symbol's documentation, in ``doc.sections``.
+    Section = 'section'
+    #: The summary, ``doc.brief``, which is a section by every other measure.
+    Summary = 'summary'
+    #: A field of the comment as a whole: a name, or True for a bare flag.
+    DocField = 'doc_field'
+    #: A field of the parameter written just above the tag, likewise.
+    ParamField = 'param_field'
+
+
 @dataclasses.dataclass(frozen=True)
 class TagSpec:
+    #: What the tag attaches to, and so which of the parser's arms handles it.
+    target: TagTarget
     #: Whether the tag is followed by a whitespace-delimited name.
-    takes_name: bool
+    takes_name: bool = False
     #: How much of the text that follows the tag belongs to it.
     text: TagText = TagText.NoText
+    #: The attribute a DocField or ParamField tag writes; '' for the rest.
+    field: str = ''
+    #: How a template labels the section this tag opens; '' for the rest.
+    label: str = ''
 
 
-#: Tags that hold one paragraph of prose about the symbol.
-PROSE_TAGS = ('brief', 'note', 'warning', 'since', 'todo', 'see')
+#: Tags that hold one paragraph of prose about the symbol, and how a template
+#: labels each.
+PROSE_TAGS = {
+    'note': 'Note:',
+    'warning': 'Warning:',
+    'since': 'Since:',
+    'todo': 'TODO:',
+    'see': 'See also:',
+}
 #: Tags that hold a block, which a code sample needs in order to keep the
 #: blank lines inside it.
-BLOCK_TAGS = ('example',)
+BLOCK_TAGS = {'example': 'Example:'}
 #: The tag whose text is the summary rather than a section of its own.
 BRIEF = 'brief'
 #: The tag that defines a group; its name is the group's, its text the title.
@@ -64,24 +96,34 @@ DEFGROUP = 'defgroup'
 #: The tag that marks a comment block as documenting the file it is in.
 FILE = 'file'
 
-#: The recognised tag vocabulary.  Extension point: add an entry here and a
-#: matching branch in ``Parser._handle_tag`` — a tag that only carries text
-#: needs no branch, just an entry above.
+#: The recognised tag vocabulary, as data: a tag is what it attaches to, so
+#: adding one is adding a row here.  ``Parser`` reads this and knows no tag
+#: name of its own.
 TAG_SPECS: dict[str, TagSpec] = {
-    **{kind.value: TagSpec(takes_name=True, text=TagText.Block) for kind in ParamKind},
-    **{name: TagSpec(takes_name=False, text=TagText.Paragraph) for name in PROSE_TAGS},
-    **{name: TagSpec(takes_name=False, text=TagText.Block) for name in BLOCK_TAGS},
-    'required': TagSpec(takes_name=False),
-    'ingroup': TagSpec(takes_name=True),
+    **{
+        kind.value: TagSpec(TagTarget.Param, takes_name=True, text=TagText.Block)
+        for kind in ParamKind
+    },
+    **{
+        name: TagSpec(TagTarget.Section, text=TagText.Paragraph, label=label)
+        for name, label in PROSE_TAGS.items()
+    },
+    **{
+        name: TagSpec(TagTarget.Section, text=TagText.Block, label=label)
+        for name, label in BLOCK_TAGS.items()
+    },
+    BRIEF: TagSpec(TagTarget.Summary, text=TagText.Paragraph),
     # The title runs to the end of the line; the paragraphs below it are the
     # group's description, which is the enclosing comment block's own.
-    DEFGROUP: TagSpec(takes_name=True, text=TagText.Paragraph),
-    'deprecated': TagSpec(takes_name=False),
-    'internal': TagSpec(takes_name=False),
-    FILE: TagSpec(takes_name=False),
-    # Like @required, these refine the parameter written just above them.
-    'type': TagSpec(takes_name=True),
-    'default': TagSpec(takes_name=True),
+    DEFGROUP: TagSpec(TagTarget.Section, takes_name=True, text=TagText.Paragraph),
+    'ingroup': TagSpec(TagTarget.DocField, takes_name=True, field='group'),
+    'deprecated': TagSpec(TagTarget.DocField, field='deprecated'),
+    'internal': TagSpec(TagTarget.DocField, field='internal'),
+    FILE: TagSpec(TagTarget.DocField, field='documents_file'),
+    # These refine the parameter written just above them.
+    'required': TagSpec(TagTarget.ParamField, field='required'),
+    'type': TagSpec(TagTarget.ParamField, takes_name=True, field='type_'),
+    'default': TagSpec(TagTarget.ParamField, takes_name=True, field='default'),
 }
 
 
@@ -110,6 +152,8 @@ class Section:
     name: str = ''
     #: File line the tag is on.
     line: int = 0
+    #: How a template that has no rendering of its own for `kind` labels it.
+    label: str = ''
 
 
 @dataclasses.dataclass
@@ -165,8 +209,8 @@ _NAME_RE = re.compile(r'\s*(\S+)(.*)', re.DOTALL)
 # mentions a tag ('not tagged with @ingroup, so ...') would otherwise take the
 # punctuation that follows it as the name.
 _PLAUSIBLE_NAME_RE = re.compile(r'[A-Za-z0-9_]')
-_PARAM_TAGS = frozenset(kind.value for kind in ParamKind)
 _LITERAL_HINT = 'kept as literal text; use @@ to write a literal "@"'
+_PARAM_TAG_LIST = ', '.join('@' + kind.value for kind in ParamKind)
 _BLANK_LINE_RE = re.compile(r'\n[ \t]*\n')
 
 
@@ -176,20 +220,21 @@ class Parser:
         tokens: Sequence[tag_lexer.Tag | str],
         strict: bool,
         first_line: int,
+        specs: Mapping[str, TagSpec] = TAG_SPECS,
     ) -> None:
         # Copied because _take_name pushes the unconsumed remainder back.
         self._tokens: list[tag_lexer.Tag | str] = list(tokens)
         self._pos = 0
         self._strict = strict
         self._first_line = first_line
+        self._specs = specs
 
         self._doc_description = ''
         self._brief = ''
-        self._group: str | None = None
-        self._group_line = 0
-        self._deprecated = False
-        self._internal = False
-        self._documents_file = False
+        #: What the DocField tags set, by the attribute each names.
+        self._fields: dict[str, str | bool] = {}
+        #: Where each of those tags was written, for the diagnostics.
+        self._field_lines: dict[str, int] = {}
         self._params: list[Param] = []
         self._sections: list[Section] = []
         self._warnings: list[DocWarning] = []
@@ -197,6 +242,8 @@ class Parser:
         # What the text being read belongs to: a parameter, a section, or —
         # when nothing is open — the symbol's own description.
         self._open: Param | Section | None = None
+        #: Whether the open section is the summary rather than one of many.
+        self._is_summary = False
         self._ends_at_blank_line = False
         self._text = ''
 
@@ -213,20 +260,24 @@ class Parser:
         def of_kind(kind: ParamKind) -> list[Param]:
             return [p for p in self._params if p.kind == kind]
 
+        def flag(field: str) -> bool:
+            return bool(self._fields.get(field, False))
+
+        group = self._fields.get('group')
         return DocComment(
             description=self._doc_description,
             brief=self._brief,
-            group=self._group,
-            group_line=self._group_line,
+            group=group if isinstance(group, str) else None,
+            group_line=self._field_lines.get('group', 0),
             args=of_kind(ParamKind.Positional),
             options=of_kind(ParamKind.Option),
             params=of_kind(ParamKind.SingleArgParam),
             multi_params=of_kind(ParamKind.MultiArgParam),
             returns=of_kind(ParamKind.OutVar),
             sections=self._sections,
-            deprecated=self._deprecated,
-            internal=self._internal,
-            documents_file=self._documents_file,
+            deprecated=flag('deprecated'),
+            internal=flag('internal'),
+            documents_file=flag('documents_file'),
             warnings=self._warnings,
         )
 
@@ -247,7 +298,7 @@ class Parser:
         return self._first_line + tag.line - 1
 
     def _handle_tag(self, tag: tag_lexer.Tag) -> None:
-        spec = TAG_SPECS.get(tag.name)
+        spec = self._specs.get(tag.name)
         if spec is None:
             self._literal_tag(tag, f'unknown tag @{tag.name}, {_LITERAL_HINT}')
             return
@@ -263,37 +314,21 @@ class Parser:
                 return
             name = taken
 
-        if spec.text is not TagText.NoText:
-            self._open_sink(tag, spec, name)
-        elif tag.name == 'required':
-            if not isinstance(self._open, Param):
-                raise ParseError(
-                    '@required must follow one of '
-                    f'{", ".join("@" + k.value for k in ParamKind)}',
-                    line=self._file_line(tag),
-                )
-            self._open.required = True
-        elif tag.name == 'ingroup':
-            self._group = name
-            self._group_line = self._file_line(tag)
-        elif tag.name == 'deprecated':
-            # Symbol-level: a parameter cannot be deprecated on its own.
-            self._deprecated = True
-        elif tag.name == 'internal':
-            self._internal = True
-        elif tag.name == FILE:
-            self._documents_file = True
-        elif tag.name in ('type', 'default'):
-            if not isinstance(self._open, Param):
-                raise ParseError(
-                    f'@{tag.name} must follow one of '
-                    f'{", ".join("@" + k.value for k in ParamKind)}',
-                    line=self._file_line(tag),
-                )
-            if tag.name == 'type':
-                self._open.type_ = name
-            else:
-                self._open.default = name
+        # A tag that takes no name carries a bare True instead of one.
+        value: str | bool = name if spec.takes_name else True
+        match spec.target:
+            case TagTarget.Param | TagTarget.Section | TagTarget.Summary:
+                self._open_sink(tag, spec, name)
+            case TagTarget.DocField:
+                self._fields[spec.field] = value
+                self._field_lines[spec.field] = self._file_line(tag)
+            case TagTarget.ParamField:
+                if not isinstance(self._open, Param):
+                    raise ParseError(
+                        f'@{tag.name} must follow one of {_PARAM_TAG_LIST}',
+                        line=self._file_line(tag),
+                    )
+                setattr(self._open, spec.field, value)
 
         if not spec.takes_name:
             self._eat_leading_space()
@@ -302,7 +337,7 @@ class Parser:
         """Start reading text for `tag`, closing whatever was open before."""
         self._close()
         line = self._file_line(tag)
-        if tag.name in _PARAM_TAGS:
+        if spec.target is TagTarget.Param:
             kind = ParamKind(tag.name)
             self._open = Param(
                 kind=kind,
@@ -313,7 +348,10 @@ class Parser:
                 line=line,
             )
         else:
-            self._open = Section(kind=tag.name, text='', name=name, line=line)
+            self._open = Section(
+                kind=tag.name, text='', name=name, line=line, label=spec.label
+            )
+            self._is_summary = spec.target is TagTarget.Summary
         self._ends_at_blank_line = spec.text is TagText.Paragraph
 
     def _eat_leading_space(self) -> None:
@@ -358,7 +396,7 @@ class Parser:
             self._params.append(self._open)
         elif isinstance(self._open, Section):
             self._open.text = text
-            if self._open.kind == BRIEF:
+            if self._is_summary:
                 self._brief = text
             else:
                 self._sections.append(self._open)
@@ -370,6 +408,7 @@ class Parser:
             )
 
         self._open = None
+        self._is_summary = False
         self._ends_at_blank_line = False
         self._text = ''
 
@@ -379,6 +418,7 @@ def parse(
     *,
     strict: bool = False,
     first_line: int = 1,
+    specs: Mapping[str, TagSpec] = TAG_SPECS,
 ) -> DocComment:
     """Parse `tokens`; `first_line` is the file line the comment starts on."""
-    return Parser(tokens, strict=strict, first_line=first_line).parse()
+    return Parser(tokens, strict=strict, first_line=first_line, specs=specs).parse()

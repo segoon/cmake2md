@@ -33,18 +33,37 @@ Each module has one job, and they stack:
 
 ## Adding a tag
 
-The vocabulary lives in `TAG_SPECS` in `src/cmake2md/doc_parser.py`. A tag that
-only carries prose needs an entry there and nothing else:
+The vocabulary lives in `TAG_SPECS` in `src/cmake2md/doc_parser.py`, as data:
+adding a tag is adding a row, and `Parser` names no tag of its own.
+
+A `TagSpec` says three things. **What the tag attaches to**, `TagTarget`:
+
+| Target | The tag becomes | Example |
+|--------|-----------------|---------|
+| `Param` | a parameter, of the `ParamKind` the tag is named after | `@option` |
+| `Section` | an entry in `doc.sections`, found by `doc.of_kind()` | `@note` |
+| `Summary` | `doc.brief`, a section by every other measure | `@brief` |
+| `DocField` | the `field` of the comment as a whole | `@ingroup`, `@internal` |
+| `ParamField` | the `field` of the parameter written above it | `@required`, `@type` |
+
+**Whether it takes a name**, `takes_name` — a `DocField` or `ParamField` tag
+that takes one stores it, and one that does not stores `True`, which is what
+makes `@ingroup build` and `@internal` the same kind of thing. And **how much
+of the following text is its own**, `TagText`: `Paragraph` ends at a blank line
+as Doxygen's tags do, `Block` runs to the next tag so a code sample keeps its
+blank lines, and `NoText` leaves the text where it was.
+
+So a new prose tag is one row:
 
 ```python
-PROSE_TAGS = ('brief', 'note', 'warning', 'since', 'todo', 'see', 'mytag')
+'author': TagSpec(TagTarget.Section, text=TagText.Paragraph, label='Author:'),
 ```
 
-`TagSpec` says whether the tag takes a name, and how much of the text after it
-belongs to it: `TagText.Paragraph` ends at a blank line as Doxygen's tags do,
-`TagText.Block` runs to the next tag so a code sample keeps its blank lines,
-and `TagText.NoText` is a flag. A tag that means something structural — a flag
-to set, a name to record — also needs a branch in `Parser._handle_tag`.
+A new parameter *kind* is the one genuinely large addition: it also needs
+`signature.py` to read it out of the code and `checks.py` to compare the two.
+
+A project that wants a tag of its own does not need any of this — it declares
+it in `[tool.cmake2md.tags]`, which builds the same `TagSpec`.
 
 ## Two rules the code keeps
 
