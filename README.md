@@ -135,7 +135,7 @@ record — an owner, a rationale, a ticket — is its own business. Declare it i
 the config file:
 
 ```toml
-[tool.cmake2md.tags]
+[tags]
 author = { label = "Author:" }
 rationale = { text = "block", label = "Why:" }
 ticket = { takes_name = true, label = "Ticket:" }
@@ -352,7 +352,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
-| `-c`, `--config` | Read the arguments from the `[tool.cmake2md]` table of a TOML file. |
+| `-c`, `--config` | Read the arguments from this TOML file instead of the nearest `cmake2md.toml`. |
 | `--inject` | Write between the markers of an existing `--output` file instead of replacing it. |
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
@@ -376,17 +376,17 @@ differs, since nobody in CI can re-run the generator to find out.
 starting with `_` is private by CMake convention, and `@internal` says so
 outright; neither is required to be documented.
 
-A `.cmake2mdignore` file in the working directory lists further `--exclude`
+A `.cmake2mdignore` file at the project root lists further `--exclude`
 patterns, one per line, `#` starting a comment.
 
 ### The config file
 
 A CI step that renders three templates needs six paired arguments to say so,
 and they then have to be kept in step across a Makefile, a workflow file and a
-pre-commit hook. Say it once instead, in `pyproject.toml`:
+pre-commit hook. Say it once instead, in `cmake2md.toml` beside your CMake
+code:
 
 ```toml
-[tool.cmake2md]
 template = ["reference.md.jinja"]
 output = ["docs/reference.md"]
 path = ["."]
@@ -397,16 +397,22 @@ and the CI step is `cmake2md` with nothing after it. Every long option has a
 setting of the same name, with `-` or `_` between words, and a lone string is
 accepted where a list belongs. A setting of the wrong type is refused rather
 than coerced: `strict = "no"` is a string, and every non-empty string is true,
-so taking it would mean doing the opposite of what it says. Anything given on the command line wins over
-the file, so `cmake2md --output - .` still prints to the terminal — and a flag
-turned off explicitly counts as given, so `--no-strict` wins over a
-`strict = true` in the file.
+so taking it would mean doing the opposite of what it says. Anything given on
+the command line wins over the file, so `cmake2md --output - .` still prints to
+the terminal — and a flag turned off explicitly counts as given, so
+`--no-strict` wins over a `strict = true` in the file.
 
-`pyproject.toml` is read when it has a `[tool.cmake2md]` table; `--config`
-names a different file, which must then exist.
+The file is looked for in the working directory and then in each directory
+above it, stopping at a repository, so `cmake2md` does the same thing from a
+build directory as from the project root. **A relative path in it is relative
+to the file**, not to wherever cmake2md was run from — otherwise `output =
+"docs/reference.md"` would name a different file from every directory. A
+template that is not a file is left as written, so a built-in name still names
+a built-in. `--config` names a different file, which must then exist, and its
+directory is the project root instead.
 
-The one setting with no option behind it is the `[tool.cmake2md.tags]` table
-of [tags of your own](#tags-of-your-own): a vocabulary is a property of the
+The one setting with no option behind it is the `[tags]` table of
+[tags of your own](#tags-of-your-own): a vocabulary is a property of the
 project, not of the run.
 
 ### Injecting into a README

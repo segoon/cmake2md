@@ -97,9 +97,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         '--config',
         metavar='FILE',
         help=(
-            'Read the arguments from the [tool.cmake2md] table of this TOML '
-            f'file. Defaults to {config.DEFAULT_FILE} when it has such a '
-            'table. Arguments given on the command line win.'
+            'Read the arguments from this TOML file. Without it, the nearest '
+            f'{config.DEFAULT_FILE} at or above the working directory is '
+            'used. Arguments given on the command line win.'
         ),
     )
     parser.add_argument(
@@ -177,20 +177,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_config(args: argparse.Namespace) -> None:
+def apply_config(args: argparse.Namespace) -> pathlib.Path:
     """Fill in from the config file whatever the command line left unsaid.
 
     The command line wins, always: a config file is where a project records
     what it usually does, not something that can override what was just asked
-    for.
+    for.  Returns the project root: where the file was found, or the working
+    directory when there is none.
     """
-    explicit = args.config is not None
-    path = pathlib.Path(args.config or config.DEFAULT_FILE)
-    if not explicit and not path.is_file():
-        return
-
-    if explicit and not path.is_file():
-        raise UsageError(f'no config file at {path}')
+    if args.config is None:
+        path = config.find(pathlib.Path.cwd())
+        if path is None:
+            return pathlib.Path.cwd()
+    else:
+        path = pathlib.Path(args.config)
+        if not path.is_file():
+            raise UsageError(f'no config file at {path}')
 
     for key, value in config.load(path).items():
         current = getattr(args, key, None)
@@ -200,6 +202,7 @@ def apply_config(args: argparse.Namespace) -> None:
         # explicit --no-strict.
         if current is None or current == []:
             setattr(args, key, value)
+    return path.parent
 
 
 def apply_defaults(args: argparse.Namespace) -> None:
@@ -464,7 +467,7 @@ def run(args: argparse.Namespace) -> int:
     if args.list_templates:
         return list_templates()
 
-    apply_config(args)
+    root = apply_config(args)
     apply_defaults(args)
     pairs = validate_args(args)
 
@@ -490,9 +493,7 @@ def run(args: argparse.Namespace) -> int:
     commands: list[parse.Command] = []
     variables: list[parse.Variable] = []
     blocks: list[parse.Block] = []
-    for path in collect_sources(
-        args.path, args.exclude + read_ignore_file(pathlib.Path.cwd())
-    ):
+    for path in collect_sources(args.path, args.exclude + read_ignore_file(root)):
         file = parse.parse_file(path)
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)

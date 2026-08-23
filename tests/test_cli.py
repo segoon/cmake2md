@@ -3,6 +3,7 @@ import pathlib
 import pytest
 
 from cmake2md import cli
+from cmake2md import config
 
 TEMPLATE = """\
 {% for symbol in symbols %}
@@ -785,19 +786,25 @@ def test_list_templates_names_both_builtins(capsys):
 
 
 CONFIG = """\
-[project]
-name = "demo"
-
-[tool.cmake2md]
 template = ["function.md.jinja"]
 output = ["docs/reference.md"]
 path = ["."]
 """
 
+#: The smallest config file that renders the directory it is in.
+BASE_CONFIG = 'template = "function.md.jinja"\noutput = "out.md"\npath = "."\n'
+
+
+def write_config(directory, extra=''):
+    """Write a config file rendering `directory`, plus whatever else it says."""
+    path = directory / config.DEFAULT_FILE
+    path.write_text(BASE_CONFIG + extra, encoding='utf-8')
+    return path
+
 
 def test_config_file_supplies_the_arguments(cmake_file, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(CONFIG, encoding='utf-8')
+    (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
     assert run() == 0
     text = (tmp_path / 'docs' / 'reference.md').read_text(encoding='utf-8')
     assert '## example_add_library' in text
@@ -807,22 +814,71 @@ def test_the_command_line_wins_over_the_config_file(
     cmake_file, template, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(CONFIG, encoding='utf-8')
+    (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
     out = tmp_path / 'elsewhere.md'
     assert run('-t', template, '-o', out) == 0
     assert out.exists()
     assert not (tmp_path / 'docs').exists()
 
 
-def test_a_pyproject_without_our_table_is_not_a_config_file(
-    cmake_file, template, tmp_path, monkeypatch, capsys
-):
+def test_an_empty_config_file_says_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[project]\nname = "x"\n', encoding='utf-8'
-    )
+    (tmp_path / config.DEFAULT_FILE).write_text('', encoding='utf-8')
     assert run() == 1
     assert 'no --template given' in capsys.readouterr().err
+
+
+def test_the_config_file_is_found_from_a_subdirectory(
+    cmake_file, tmp_path, monkeypatch
+):
+    # Where a project is configured and where its commands are run are not
+    # the same place: a build directory is the usual one.
+    write_config(tmp_path)
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    # Beside the config file, not beside the caller: a relative path in the
+    # file would otherwise mean a different thing from every directory.
+    assert (tmp_path / 'out.md').exists()
+    assert not (build / 'out.md').exists()
+
+
+def test_the_search_stops_at_a_repository(cmake_file, tmp_path, monkeypatch, capsys):
+    write_config(tmp_path)
+    inner = tmp_path / 'vendored'
+    (inner / '.git').mkdir(parents=True)
+    monkeypatch.chdir(inner)
+    assert run() == 1
+    assert 'no --template given' in capsys.readouterr().err
+
+
+def test_a_builtin_template_named_in_the_config_file_stays_a_name(
+    cmake_file, tmp_path, monkeypatch
+):
+    # Only a template that is really a file is read against the config file;
+    # a built-in is a name, and resolving it would leave nothing to load.
+    write_config(tmp_path)
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
+
+
+def test_the_ignore_file_is_read_from_the_project_root(
+    cmake_file, tmp_path, monkeypatch
+):
+    write_config(tmp_path)
+    (tmp_path / cli.IGNORE_FILE).write_text('CMakeLists.txt\n', encoding='utf-8')
+    build = tmp_path / 'build'
+    build.mkdir()
+    monkeypatch.chdir(build)
+    assert run() == 0
+    # The only source there is was excluded, so nothing was documented.
+    assert '## example_add_library' not in (tmp_path / 'out.md').read_text(
+        encoding='utf-8'
+    )
 
 
 @pytest.mark.parametrize(
@@ -834,25 +890,21 @@ def test_a_pyproject_without_our_table_is_not_a_config_file(
         ('check = 1', 'check must be true or false'),
         ('json = 3', 'json must be a string'),
         ('template = 3', 'template must be a string or a list of them'),
-        ('tags = 3', '[tool.cmake2md.tags] must be a table'),
+        ('tags = 3', '[tags] must be a table'),
     ],
 )
 def test_a_setting_of_the_wrong_type_is_refused(
     setting, message, tmp_path, monkeypatch, capsys
 ):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        f'[tool.cmake2md]\n{setting}\n', encoding='utf-8'
-    )
+    (tmp_path / config.DEFAULT_FILE).write_text(f'{setting}\n', encoding='utf-8')
     assert run() == 1
     assert message in capsys.readouterr().err
 
 
 def test_an_unknown_setting_names_the_ones_there_are(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\nnosuch = 1\n', encoding='utf-8'
-    )
+    (tmp_path / config.DEFAULT_FILE).write_text('nosuch = 1\n', encoding='utf-8')
     assert run() == 1
     err = capsys.readouterr().err
     assert 'has no setting called nosuch' in err
@@ -864,15 +916,18 @@ def test_a_named_config_file_must_exist(tmp_path, capsys):
     assert 'no config file at' in capsys.readouterr().err
 
 
+def test_a_named_config_file_is_read_from_anywhere(cmake_file, tmp_path, monkeypatch):
+    path = write_config(tmp_path)
+    monkeypatch.chdir(tmp_path.parent)
+    assert run('--config', path) == 0
+    assert (tmp_path / 'out.md').exists()
+
+
 def test_a_lone_string_is_accepted_where_a_list_belongs(
     cmake_file, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
-        'output = "out.md"\npath = "."\n',
-        encoding='utf-8',
-    )
+    write_config(tmp_path)
     assert run() == 0
     assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
@@ -881,11 +936,7 @@ def test_a_dash_in_a_setting_name_reads_as_an_underscore(
     cmake_file, tmp_path, monkeypatch, capsys
 ):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
-        'output = "out.md"\npath = "."\nrequire-docs = true\n',
-        encoding='utf-8',
-    )
+    write_config(tmp_path, 'require-docs = true\n')
     # The fixture has an undocumented function in it, which is what
     # require-docs is there to catch.
     assert run() == 1
@@ -898,11 +949,7 @@ def test_no_strict_on_the_command_line_beats_the_config_file(
     # A flag turned off explicitly is not the same as a flag left unsaid; the
     # file only fills in what the command line did not say.
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
-        'output = "out.md"\npath = "."\nstrict = true\n',
-        encoding='utf-8',
-    )
+    write_config(tmp_path, 'strict = true\n')
     assert run('--no-strict') == 0
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
 
@@ -911,22 +958,9 @@ def test_the_config_file_can_turn_strict_off(
     unknown_tag, tmp_path, monkeypatch, capsys
 ):
     monkeypatch.chdir(tmp_path)
-    (tmp_path / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
-        'output = "out.md"\npath = "."\nstrict = false\n',
-        encoding='utf-8',
-    )
+    write_config(tmp_path, 'strict = false\n')
     assert run() == 0
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
-
-
-def write_config(directory, tags):
-    """A config file rendering the current directory, plus a [tags] table."""
-    (directory / 'pyproject.toml').write_text(
-        '[tool.cmake2md]\ntemplate = "function.md.jinja"\n'
-        'output = "out.md"\npath = "."\n\n[tool.cmake2md.tags]\n' + tags,
-        encoding='utf-8',
-    )
 
 
 DOCUMENTED_WITH_A_CUSTOM_TAG = """\
@@ -943,7 +977,7 @@ def test_a_tag_the_config_file_declares_is_rendered(tmp_path, monkeypatch):
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
-    write_config(tmp_path, 'author = { label = "Author:" }\n')
+    write_config(tmp_path, '\n[tags]\nauthor = { label = "Author:" }\n')
     # Strict by default: an undeclared tag would fail the run instead.
     assert run() == 0
     assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
@@ -954,7 +988,7 @@ def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path, monke
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
-    write_config(tmp_path, 'author = {}\n')
+    write_config(tmp_path, '\n[tags]\nauthor = {}\n')
     assert run() == 0
     assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
@@ -977,7 +1011,7 @@ def test_a_doubtful_tag_declaration_is_a_usage_error(
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
-    write_config(tmp_path, tags)
+    write_config(tmp_path, '\n[tags]\n' + tags)
     assert run() == 1
     assert message in capsys.readouterr().err
 

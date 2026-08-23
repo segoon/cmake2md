@@ -1,8 +1,12 @@
-"""The ``[tool.cmake2md]`` table of a ``pyproject.toml``.
+"""The ``cmake2md.toml`` a project keeps beside its CMake code.
 
 A CI step that renders three templates needs six paired arguments to say so,
 and they have to be kept in step across a Makefile, a workflow file and a
 pre-commit hook.  A config file says it once.
+
+The settings are the whole file: it is cmake2md's own, so it needs no table
+to say whose settings these are.  A relative path in it is relative to the
+file, which is the only reading that survives being run from a subdirectory.
 
 ``tomli`` reads it on every version.  The standard library grew the same
 parser as ``tomllib`` in 3.11, but reaching for whichever of the two is
@@ -21,9 +25,11 @@ from . import doc_parser
 from . import tag_lexer
 from .errors import UsageError
 
-#: Where the settings live, and the file they live in by default.
-DEFAULT_FILE = 'pyproject.toml'
-TABLE = 'tool.cmake2md'
+#: The file the settings live in, looked for from the working directory up.
+DEFAULT_FILE = 'cmake2md.toml'
+#: What stops that search: past a repository, the file would not be this
+#: project's own any more.
+ROOT_MARKERS = ('.git',)
 
 
 class Kind(enum.Enum):
@@ -38,12 +44,11 @@ class Kind(enum.Enum):
     Bool = 'bool'
     Str = 'str'
     List = 'list'
-    #: The [tool.cmake2md.tags] sub-table, which declares tags of the
-    #: project's own.
+    #: The [tags] sub-table, which declares tags of the project's own.
     Tags = 'tags'
 
 
-#: Settings the file may carry.  Anything else in the table is a mistake worth
+#: Settings the file may carry.  Anything else in it is a mistake worth
 #: pointing out rather than ignoring.
 KEYS = {
     'template': Kind.List,
@@ -59,6 +64,15 @@ KEYS = {
     'tags': Kind.Tags,
 }
 
+#: Settings that name a file, and so are read relative to the config file.
+#: 'exclude' is not one: it is a glob matched against a source path, not a
+#: path itself.
+PATH_KEYS = frozenset({'output', 'path', 'template_dir', 'json'})
+#: A template is either a path or the name of a built-in, told apart the way
+#: rendering.resolve_template_spec tells them apart: by whether the file is
+#: there.  Only the path sort is read against the config file.
+TEMPLATE_KEYS = frozenset({'template'})
+
 #: What a tag's own table may say, beyond which nothing is guessed at.
 TAG_KEYS = frozenset({'text', 'takes_name', 'label'})
 #: A custom tag holds text; a flag or a label would have nowhere on the parsed
@@ -66,11 +80,28 @@ TAG_KEYS = frozenset({'text', 'takes_name', 'label'})
 TAG_TEXTS = (doc_parser.TagText.Paragraph, doc_parser.TagText.Block)
 
 
-def load(path: pathlib.Path) -> dict[str, Any]:
-    """Read the [tool.cmake2md] table of `path`.
+def find(start: pathlib.Path) -> pathlib.Path | None:
+    """The nearest config file at or above `start`, if there is one.
 
-    An empty result means the file has nothing to say about cmake2md, which
-    is not an error: a project may keep a pyproject.toml for other reasons.
+    A project is configured once, at its root, but its commands are run from
+    wherever is convenient — a build directory, a subdirectory being worked
+    on.  The search stops at a repository, since a file above one belongs to
+    something else.
+    """
+    for directory in (start, *start.parents):
+        candidate = directory / DEFAULT_FILE
+        if candidate.is_file():
+            return candidate
+        if any((directory / marker).exists() for marker in ROOT_MARKERS):
+            return None
+    return None
+
+
+def load(path: pathlib.Path) -> dict[str, Any]:
+    """Read the settings `path` holds, which are the whole of it.
+
+    An empty result means the file says nothing, which is not an error: a
+    project may keep one for the sake of the tags alone.
     """
     try:
         data = tomli.loads(path.read_text(encoding='utf-8'))
@@ -79,13 +110,10 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     except tomli.TOMLDecodeError as exc:
         raise UsageError(f'{path} is not valid TOML: {exc}') from exc
 
-    where = f'{path}: [{TABLE}]'
-    table = data.get('tool', {}).get('cmake2md', {})
-    if not isinstance(table, dict):
-        raise UsageError(f'{where} must be a table')
-
+    where = f'{path}:'
+    root = path.parent
     settings: dict[str, Any] = {}
-    for key, value in table.items():
+    for key, value in data.items():
         name = key.replace('-', '_')
         if name not in KEYS:
             known = ', '.join(sorted(KEYS))
@@ -100,8 +128,27 @@ def load(path: pathlib.Path) -> dict[str, Any]:
             case Kind.List:
                 settings[name] = _as_list(where, key, value)
             case Kind.Tags:
-                settings[name] = _as_tags(f'{path}: [{TABLE}.tags]', value)
+                settings[name] = _as_tags(f'{path}: [tags]', value)
+        if name in PATH_KEYS:
+            settings[name] = _against(root, settings[name])
+        elif name in TEMPLATE_KEYS:
+            settings[name] = _against(root, settings[name], only_if_file=True)
     return settings
+
+
+def _against(root: pathlib.Path, value: Any, only_if_file: bool = False) -> Any:
+    """Read a path the config file gives as relative to the file itself.
+
+    Anything else would depend on where cmake2md happened to be run from,
+    which is exactly what a config file at the project root is there to stop
+    mattering.
+    """
+    if isinstance(value, list):
+        return [_against(root, item, only_if_file) for item in value]
+    resolved = root / value
+    if only_if_file and not resolved.is_file():
+        return value
+    return str(resolved)
 
 
 def _as_str(where: str, key: str, value: Any) -> str:
@@ -120,7 +167,7 @@ def _as_list(where: str, key: str, value: Any) -> list[str]:
 
 
 def _as_tags(where: str, value: Any) -> dict[str, doc_parser.TagSpec]:
-    """Read [tool.cmake2md.tags] as the vocabulary the parser understands."""
+    """Read the [tags] table as the vocabulary the parser understands."""
     if not isinstance(value, dict):
         raise UsageError(f'{where} must be a table, one entry per tag')
 

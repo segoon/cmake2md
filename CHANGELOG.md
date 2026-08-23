@@ -4,9 +4,9 @@
 
 ### Added
 
-- Tags a project declares itself, in the `[tool.cmake2md.tags]` table of the
-  config file. A declared tag opens a section like `@note` does — `text`,
-  `takes_name` and `label` say how — so it is recognised rather than reported,
+- Tags a project declares itself, in the `[tags]` table of the config file. A
+  declared tag opens a section like `@note` does — `text`, `takes_name` and
+  `label` say how — so it is recognised rather than reported,
   reachable as `doc.of_kind('author')`, and rendered by the built-in template
   under its label without anyone writing a template.
 - `cmake/cmake2md.cmake`, a module whose `cmake2md_generate()` adds two build
@@ -14,9 +14,11 @@
   `-check` companion that verifies it — so a CMake project can document itself
   from its own build. It is written with cmake2md's own tags, and the test
   suite holds it to `--strict`.
-- A config file: the `[tool.cmake2md]` table of `pyproject.toml`, or any TOML
-  file named with `--config`, so a CI step is `cmake2md` and nothing else. The
-  command line always wins over it.
+- A config file: the nearest `cmake2md.toml` at or above the working
+  directory, or any TOML file named with `--config`, so a CI step is
+  `cmake2md` and nothing else. A relative path in it is relative to the file,
+  so the run means the same thing from a build directory as from the project
+  root. The command line always wins over it.
 - Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
   including CMake's own `#[==[.rst:` house style. A symbol documented that way
   used to read as undocumented, silently.

@@ -28,7 +28,7 @@ Each module has one job, and they stack:
 | `checks.py` | Where the comment and the code disagree. |
 | `rendering.py` | The Jinja environment, the template search path and the filters. |
 | `serialize.py` | The same model as JSON. |
-| `config.py` | The `[tool.cmake2md]` table. |
+| `config.py` | The `cmake2md.toml` a project keeps beside its CMake code. |
 | `cli.py` | Arguments, the passes over the sources, and writing the output. |
 
 ## Adding a tag
@@ -63,7 +63,7 @@ A new parameter *kind* is the one genuinely large addition: it also needs
 `signature.py` to read it out of the code and `checks.py` to compare the two.
 
 A project that wants a tag of its own does not need any of this — it declares
-it in `[tool.cmake2md.tags]`, which builds the same `TagSpec`.
+it in the `[tags]` table of `cmake2md.toml`, which builds the same `TagSpec`.
 
 ## Two rules the code keeps
 
