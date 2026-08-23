@@ -354,6 +354,18 @@ def test_defgroup_on_a_symbol_is_reported(template, tmp_path, capsys):
     )
 
 
+def test_file_tag_on_a_symbol_is_reported(template, tmp_path, capsys):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @file\n# @brief Adds a thing.\nfunction(f)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    assert 'documents nothing; a file is documented by a comment block' in (
+        capsys.readouterr().err
+    )
+
+
 def test_variables_reach_templates_already_parsed(cmake_file, tmp_path):
     var_template = tmp_path / 'vars.md.jinja'
     var_template.write_text(

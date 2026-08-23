@@ -22,6 +22,9 @@
   first is kept, instead of silently overwriting it. A `@defgroup` naming a
   group a previous one already defined is likewise a warning, and only the
   first defines the group; previously the section was rendered twice.
+- `@file` above a `function()`, `macro()`, variable or command call is now
+  reported, like a `@defgroup` in the same place already was: it documents a
+  comment block as a whole, and would previously do nothing without a word.
 
 ### Added
 

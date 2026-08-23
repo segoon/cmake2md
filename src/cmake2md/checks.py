@@ -50,6 +50,7 @@ def check(
     """
     warnings = _broken_examples(doc)
     warnings += _group_problems(item, doc, groups)
+    warnings += _misplaced_file_tag(item, doc)
     if isinstance(item, parse.Symbol) and doc.all_params():
         warnings += _duplicate_params(doc)
         warnings += _params_the_code_denies(item, doc)
@@ -98,6 +99,25 @@ def _group_problems(
                 )
             )
     return warnings
+
+
+def _misplaced_file_tag(item: parse.Documented, doc: DocComment) -> list[DocWarning]:
+    """Report @file written above a function, macro, variable or command.
+
+    Like @defgroup, @file documents a comment block as a whole and has
+    nowhere else to attach: a Symbol, Command or Variable marked
+    documents_file would never reach `files`, so the tag would silently do
+    nothing.
+    """
+    if isinstance(item, parse.Block) or not doc.documents_file:
+        return []
+    return [
+        DocWarning(
+            f'@file in the documentation of {item.name} documents nothing; a '
+            'file is documented by a comment block of its own',
+            line=0,
+        )
+    ]
 
 
 def _broken_examples(doc: DocComment) -> list[DocWarning]:

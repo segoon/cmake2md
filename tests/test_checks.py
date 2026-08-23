@@ -159,6 +159,23 @@ def test_a_symbol_with_no_parameters_documented_is_left_alone(messages):
     assert messages('# Adds a thing.\nfunction(f NAME)\nendfunction()\n') == []
 
 
+def test_file_tag_on_a_symbol_is_reported(messages):
+    # @file documents a comment block as a whole; on a function it would
+    # silently do nothing, since the block never reaches `files`.
+    assert messages(documented('@file')) == [
+        '@file in the documentation of add_thing documents nothing; a file '
+        'is documented by a comment block of its own'
+    ]
+
+
+def test_file_tag_on_a_block_of_its_own_is_silent():
+    doc = doc_parser.parse(tag_lexer.tokenize(['@file', 'The project itself.']))
+    block = parse.Block(
+        name='', comments=[], comments_line=1, filepath='CMakeLists.txt', line=1
+    )
+    assert checks.check(block, doc) == []
+
+
 def test_commands_declare_no_parameters_of_their_own(tmp_path):
     path = tmp_path / 'CMakeLists.txt'
     path.write_text('# @param FOO f\noption(BAR "d" ON)\n', encoding='utf-8')
