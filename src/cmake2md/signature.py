@@ -30,10 +30,10 @@ class Signature:
 
     def declares(self, name: str) -> ParamKind | None:
         """The kind `name` is declared as, or None if it is not declared."""
-        return next(
-            (kind for kind, names in self.accepts.items() if names and name in names),
-            None,
-        )
+        for kind, names in self.accepts.items():
+            if names and name in names:
+                return kind
+        return None
 
 
 def unknown() -> Signature:
