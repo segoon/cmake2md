@@ -159,9 +159,27 @@ def test_defgroup_takes_a_name_and_a_title():
 
 
 def test_defgroup_without_a_title_keeps_an_empty_one():
-    assert doc_parser.parse(tag_lexer.tokenize([' @defgroup build'])).of_kind(
-        'defgroup'
-    )[0] == doc_parser.Section(kind='defgroup', text='', name='build', line=1)
+    doc = doc_parser.parse(tag_lexer.tokenize([' @defgroup build']))
+    assert doc.of_kind('defgroup')[0] == doc_parser.Section(
+        kind='defgroup', text='', name='build', line=1
+    )
+    # An empty title is not a mistake: collect_groups() falls back to the
+    # group's own name, unlike a tag that is rendered under a label.
+    assert doc.warnings == []
+
+
+def test_an_empty_prose_tag_is_a_warning():
+    doc = parse(' @note')
+    assert doc.of_kind('note')[0].text == ''
+    assert len(doc.warnings) == 1
+    assert doc.warnings[0].message == '@note has nothing after it'
+
+
+def test_an_empty_example_is_a_warning():
+    doc = parse(' @example')
+    assert doc.of_kind('example')[0].text == ''
+    assert len(doc.warnings) == 1
+    assert doc.warnings[0].message == '@example has nothing after it'
 
 
 def test_ingroup():

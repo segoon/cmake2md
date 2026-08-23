@@ -431,6 +431,17 @@ class Parser:
                     self._brief = text
                     self._brief_given = True
             else:
+                # A label-less tag (@defgroup) means something by its name
+                # alone, so an empty title is not a mistake — collect_groups()
+                # falls back to it. Anything rendered under a label, built-in
+                # or a project's own, reads as a bare '> **Label:**' if empty.
+                if not text and self._open.label:
+                    self._warnings.append(
+                        DocWarning(
+                            f'@{self._open.kind} has nothing after it',
+                            self._open.line,
+                        )
+                    )
                 self._sections.append(self._open)
         elif text:
             # Prose can come back to the description after a paragraph tag,

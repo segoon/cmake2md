@@ -44,6 +44,10 @@
   author documented at least one parameter of it. A function whose comment
   names none of the keywords `cmake_parse_arguments()` accepts used to be
   compared against nothing at all.
+- A tag rendered under a label — `@note`, `@example`, a project's own — left
+  with nothing after it is a warning, since it would otherwise render as a
+  bare `> **Note:**`. `@defgroup` with no title is unaffected: an empty one
+  is not a mistake, since a group with no title reads by its own name.
 
 ### Added
 

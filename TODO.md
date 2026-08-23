@@ -14,8 +14,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Smaller things
 
-* An empty `@note` becomes a section with no text, rendered as a bare
-  `> **Note:**`. Either warn or drop it.
 * `config._as_tag` turns `label = ""` into the capitalised tag name through an
   `or`, and `str.capitalize()` lowercases the rest, so `myTag` labels itself
   `Mytag:`.
