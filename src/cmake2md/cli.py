@@ -352,12 +352,16 @@ class DocRules:
 
 def enrich(
     item: parse.Documented,
-    function_template: jinja2.Template | None,
     rules: DocRules,
     groups: frozenset[str] = frozenset(),
     reported: set[tuple[str, int]] | None = None,
 ) -> dict[str, Any]:
-    """Attach the parsed doc comment and a rendered form to `item`.
+    """Attach the parsed doc comment to `item`.
+
+    `pretty` starts out as the plain description; `render_symbols` overwrites
+    it for a `Symbol`, once every symbol has been enriched. A command call has
+    no signature of its own for the function template to render, so its
+    description is all `pretty` will ever be.
 
     An `option()` or `set(... CACHE ...)` call is read twice — once as a
     `Command`, once as the `Variable` it also is — over the very same comment.
@@ -387,13 +391,23 @@ def enrich(
     res['doc'] = doc
     res['group'] = doc.group
     res['location'] = item.location
-    if function_template is not None:
-        res['pretty'] = function_template.render({'symbol': res}).strip()
-    else:
-        # A command call has no signature of its own to render, so there is
-        # nothing for the function template to do with it.
-        res['pretty'] = doc.description
+    res['pretty'] = doc.description
     return res
+
+
+def render_symbols(
+    symbols: Sequence[dict[str, Any]], function_template: jinja2.Template
+) -> None:
+    """Fill in `pretty` for every enriched symbol, in place.
+
+    Done only once every symbol is enriched, and given the whole list, so
+    that `symbol_link` inside the function template can resolve an `@see`
+    naming another symbol in the same run instead of always missing.
+    """
+    for symbol in symbols:
+        symbol['pretty'] = function_template.render(
+            {'symbol': symbol, 'symbols': symbols}
+        ).strip()
 
 
 def report_undocumented(symbols: Sequence[dict[str, Any]]) -> bool:
@@ -560,18 +574,21 @@ def run(args: argparse.Namespace) -> int:
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
     # against.
-    documented_blocks = [enrich(b, None, rules, reported=reported) for b in blocks]
+    documented_blocks = [enrich(b, rules, reported=reported) for b in blocks]
     groups = collect_groups(documented_blocks)
     known = frozenset(group['name'] for group in groups)
 
+    enriched_symbols = [enrich(s, rules, known, reported) for s in symbols]
+    # Every symbol is enriched before any of them is rendered, so @see can
+    # resolve a name against the whole list rather than always missing.
+    render_symbols(enriched_symbols, function_template)
+
     context = {
-        'symbols': [
-            enrich(s, function_template, rules, known, reported) for s in symbols
-        ],
+        'symbols': enriched_symbols,
         # Variables first, so a warning about an option()/set(... CACHE ...)
         # is reported under its own name rather than the generic 'command'.
-        'variables': [enrich(v, None, rules, known, reported) for v in variables],
-        'commands': [enrich(c, None, rules, known, reported) for c in commands],
+        'variables': [enrich(v, rules, known, reported) for v in variables],
+        'commands': [enrich(c, rules, known, reported) for c in commands],
         'groups': groups,
         'files': [b for b in documented_blocks if b['doc'].documents_file],
     }

@@ -584,6 +584,23 @@ def test_see_links_to_a_symbol_the_document_defines(tmp_path):
     assert '[other_project_fn]' not in text
 
 
+def test_see_links_through_pretty_too(tmp_path):
+    # symbol.pretty is rendered by function.md.jinja with only `symbol` in
+    # its context; @see must still resolve against the whole document, which
+    # is the path reference.md.jinja and any custom template take through
+    # `symbols | render` or `{{ symbol.pretty }}`.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# Adds a thing.\n#\n# @see other_thing\n'
+        'function(add_thing)\nendfunction()\n\n'
+        '# The other thing.\nfunction(other_thing)\nendfunction()\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'out.md'
+    assert run('-t', 'reference.md.jinja', '-o', out, source) == 0
+    assert '[other_thing](#other_thing)' in out.read_text(encoding='utf-8')
+
+
 def test_parameter_type_and_default_are_rendered(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(

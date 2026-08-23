@@ -25,6 +25,10 @@
 - `@file` above a `function()`, `macro()`, variable or command call is now
   reported, like a `@defgroup` in the same place already was: it documents a
   comment block as a whole, and would previously do nothing without a word.
+- `@see` names another symbol through `symbol_link`, which used to resolve
+  only when a template rendered `function.md.jinja` as a whole document. The
+  built-in `reference.md.jinja`, and any template reaching a symbol through
+  `symbol.pretty`, now link it the same way.
 
 ### Added
 
