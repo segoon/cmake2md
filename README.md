@@ -282,6 +282,17 @@ Each `CMAKE_FILE` is a file, a directory to search for `CMakeLists.txt` and
 directories and patterns itself, so it behaves the same in shells that do not,
 such as those on Windows.
 
+cmake2doc does not follow `include()` or `add_subdirectory()` to find more
+sources — it only reads what `CMAKE_FILE` itself resolves to. This is usually
+invisible: pointing it at a project's root directory already reaches every
+subdirectory a normal `add_subdirectory()` tree does, since the search above
+is a plain walk of the filesystem, not of the build. It matters only when a
+directory is reached solely through an `include()` or `add_subdirectory()`
+that leads *outside* the given root — a sibling `cmake/` module directory, or
+a dependency pulled in with `FetchContent`, say. List that directory
+explicitly as another `CMAKE_FILE` (or add it to `path` in
+`cmake2doc.toml`); cmake2doc will not find it on its own.
+
 `--check` is meant for CI, to verify that generated documentation was
 regenerated after a change to the CMake sources; it prints a diff of what
 differs, since nobody in CI can re-run the generator to find out.

@@ -1,9 +1,5 @@
 # TODO
 
-## Random thoughts
-
-* document how `include()`/`add_subdirectory()` should be handled (list dirs explicitly)
-
 ## From the CMinx comparison
 
 [CMinx](https://github.com/CMakePP/CMinx), the other CMake documentation
