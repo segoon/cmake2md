@@ -5,9 +5,20 @@ VENV_PYTHON := $(VENV)/bin/python
 # `make venv` (and a `PYTHON=... make` override) still work without one.
 PYTHON ?= $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),python3)
 
-EXAMPLE_TEMPLATE := examples/reference.md.jinja
-EXAMPLE_SOURCE := examples/CMakeLists.txt
-EXAMPLE_OUTPUT := examples/reference.md
+# One example per output flavour, each a self-contained project under
+# examples/.  Only the template and the output extension differ, so the two
+# rules below are shared and these variables say what changes.  rest/ names a
+# built-in template rather than a file of its own, which is what it exists to
+# show.
+EXAMPLES := md rest sphinx
+
+TEMPLATE_md := examples/md/reference.md.jinja
+TEMPLATE_rest := reference.rst.jinja
+TEMPLATE_sphinx := examples/sphinx/reference.rst.jinja
+
+OUTPUT_md := examples/md/reference.md
+OUTPUT_rest := examples/rest/reference.rst
+OUTPUT_sphinx := examples/sphinx/reference.rst
 
 .DEFAULT_GOAL := help
 
@@ -46,19 +57,43 @@ typecheck: ## Run the type checker
 .PHONY: check
 check: lint typecheck test ## Run everything CI runs
 
+.PHONY: toc
+toc: ## Regenerate the README table of contents
+	npx --yes doctoc@2 --title '**Table of contents**' README.md
+
+.PHONY: toc-check
+toc-check: ## Verify the README table of contents is up to date
+	@cp README.md /tmp/cmake2md-README.md.orig
+	@$(MAKE) toc >/dev/null
+	@if diff -q /tmp/cmake2md-README.md.orig README.md >/dev/null; then \
+		rm /tmp/cmake2md-README.md.orig; \
+	else \
+		mv /tmp/cmake2md-README.md.orig README.md; \
+		echo "README.md table of contents is out of date; run 'make toc'" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: example
-example: ## Regenerate the example documentation
-	$(PYTHON) -m cmake2md \
-		--template $(EXAMPLE_TEMPLATE) \
-		--output $(EXAMPLE_OUTPUT) \
-		$(EXAMPLE_SOURCE)
+example: $(addprefix example-,$(EXAMPLES)) ## Regenerate the example documentation
 
 .PHONY: example-check
-example-check: ## Verify the example documentation is up to date
+example-check: $(addprefix example-check-,$(EXAMPLES)) ## Verify the example documentation is up to date
+
+# Static pattern rules rather than plain ones: an implicit rule is never tried
+# for a .PHONY target, and these have no file behind them.
+.PHONY: $(addprefix example-,$(EXAMPLES)) $(addprefix example-check-,$(EXAMPLES))
+
+$(addprefix example-,$(EXAMPLES)): example-%:
+	$(PYTHON) -m cmake2md \
+		--template $(TEMPLATE_$*) \
+		--output $(OUTPUT_$*) \
+		examples/$*/CMakeLists.txt
+
+$(addprefix example-check-,$(EXAMPLES)): example-check-%:
 	$(PYTHON) -m cmake2md --check \
-		--template $(EXAMPLE_TEMPLATE) \
-		--output $(EXAMPLE_OUTPUT) \
-		$(EXAMPLE_SOURCE)
+		--template $(TEMPLATE_$*) \
+		--output $(OUTPUT_$*) \
+		examples/$*/CMakeLists.txt
 
 .PHONY: dist
 dist: clean ## Build the sdist and the wheel

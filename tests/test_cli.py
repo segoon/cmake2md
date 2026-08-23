@@ -1,5 +1,6 @@
+import dataclasses
 import pathlib
-import re
+from unittest import mock
 
 import pytest
 
@@ -26,8 +27,8 @@ def template(tmp_path):
     return path
 
 
-def run(*argv):
-    return cli.main([str(a) for a in argv])
+def run(*argv, cwd=None):
+    return cli.main([str(a) for a in argv], cwd=cwd)
 
 
 def test_renders_functions_and_options(cmake_file, template, tmp_path):
@@ -128,31 +129,20 @@ def test_check_reports_missing_output(cmake_file, template, tmp_path):
     assert not out.exists()
 
 
-def test_write_output_reports_an_os_error_instead_of_a_traceback(tmp_path, monkeypatch):
-    def fail_to_write(self, *args, **kwargs):
-        raise OSError(13, 'Permission denied')
-
-    monkeypatch.setattr(pathlib.Path, 'write_text', fail_to_write)
-    out = tmp_path / 'out.md'
-    # re.escape: a Windows path's backslashes would otherwise be read as
-    # regex escapes.
-    with pytest.raises(
-        UsageError, match=f'cannot write {re.escape(str(out))}: Permission denied'
-    ):
+def test_write_output_reports_an_os_error_instead_of_a_traceback():
+    out = mock.MagicMock(spec=pathlib.Path)
+    out.write_text.side_effect = OSError(13, 'Permission denied')
+    with pytest.raises(UsageError, match='cannot write .*: Permission denied'):
         cli.write_output(out, 'content\n', check=False)
 
 
-def test_read_ignore_file_reports_an_os_error_instead_of_a_traceback(
-    tmp_path, monkeypatch
-):
-    (tmp_path / cli.IGNORE_FILE).write_text('*.cmake\n', encoding='utf-8')
-
-    def fail_to_read(self, *args, **kwargs):
-        raise OSError(13, 'Permission denied')
-
-    monkeypatch.setattr(pathlib.Path, 'read_text', fail_to_read)
+def test_read_ignore_file_reports_an_os_error_instead_of_a_traceback():
+    directory = mock.MagicMock(spec=pathlib.Path)
+    ignore_file = directory.__truediv__.return_value
+    ignore_file.is_file.return_value = True
+    ignore_file.read_text.side_effect = OSError(13, 'Permission denied')
     with pytest.raises(UsageError, match='cannot read .*: Permission denied'):
-        cli.read_ignore_file(tmp_path)
+        cli.read_ignore_file(directory)
 
 
 UNKNOWN_TAG_SOURCE = """\
@@ -482,17 +472,16 @@ def test_output_dash_is_rejected_with_check(cmake_file, template, capsys):
 
 
 def test_output_dash_from_the_config_file_writes_to_stdout(
-    cmake_file, tmp_path, monkeypatch, capsys
+    cmake_file, tmp_path, capsys
 ):
     # A path setting is resolved against the config file's own directory,
     # but '-' means stdout and is not a path at all; resolving it the same
     # way would create a file literally called '-'.
-    monkeypatch.chdir(tmp_path)
     (tmp_path / config.DEFAULT_FILE).write_text(
-        'template = "function.md.jinja"\noutput = "-"\npath = "."\n',
+        'template = ["function.md.jinja"]\noutput = ["-"]\npath = ["."]\n',
         encoding='utf-8',
     )
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert '## example_add_library' in capsys.readouterr().out
     assert not (tmp_path / '-').exists()
 
@@ -565,20 +554,19 @@ def test_non_utf8_source_is_reported_without_a_traceback(template, tmp_path, cap
     assert 'not valid UTF-8' in capsys.readouterr().err
 
 
+EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / 'examples'
+
+
+def render_example(name, template, out):
+    """Render examples/<name>/CMakeLists.txt, as `make example-<name>` does."""
+    assert run('-t', template, '-o', out, EXAMPLES / name / 'CMakeLists.txt') == 0
+    return out.read_text(encoding='utf-8')
+
+
 def test_example_renders(tmp_path):
-    root = pathlib.Path(__file__).resolve().parent.parent
-    out = tmp_path / 'reference.md'
-    assert (
-        run(
-            '-t',
-            root / 'examples' / 'reference.md.jinja',
-            '-o',
-            out,
-            root / 'examples' / 'CMakeLists.txt',
-        )
-        == 0
+    text = render_example(
+        'md', EXAMPLES / 'md' / 'reference.md.jinja', tmp_path / 'reference.md'
     )
-    text = out.read_text(encoding='utf-8')
     assert '## example_add_library' in text
     assert '## example_fail' in text
     assert 'maintainer@example.com' in text
@@ -589,6 +577,27 @@ def test_example_renders(tmp_path):
     # from the ungrouped table.
     assert '`EXAMPLE_STATIC`' in text
     assert '_example_internal_helper' not in text
+
+
+def test_rest_example_renders_with_the_builtin_template(tmp_path):
+    text = render_example('rest', 'reference.rst.jinja', tmp_path / 'reference.rst')
+    assert 'example_add_library\n~~~' in text
+    assert '.. code:: cmake' in text
+    assert ':param NAME: the name of the resulting target' in text
+    assert '.. list-table::' in text
+    assert '``EXAMPLE_BUILD_TESTS``' in text
+
+
+def test_sphinx_example_renders_domain_directives(tmp_path):
+    text = render_example(
+        'sphinx',
+        EXAMPLES / 'sphinx' / 'reference.rst.jinja',
+        tmp_path / 'reference.rst',
+    )
+    assert '.. cmake:command:: example_add_library(' in text
+    assert '.. cmake:variable:: EXAMPLE_BUILD_TESTS' in text
+    assert '.. versionadded:: 0.2' in text
+    assert '.. deprecated::' in text
 
 
 FILE_DOC_SOURCE = """\
@@ -808,8 +817,7 @@ def test_exclude_matches_a_bare_file_name_too(template, tmp_path):
     assert 'skipped' not in out.read_text(encoding='utf-8')
 
 
-def test_ignore_file_adds_exclusions(template, tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_ignore_file_adds_exclusions(template, tmp_path):
     (tmp_path / '.cmake2mdignore').write_text(
         '# what CI does not document\ntest_*.cmake\n', encoding='utf-8'
     )
@@ -820,7 +828,7 @@ def test_ignore_file_adds_exclusions(template, tmp_path, monkeypatch):
         '# Doc\nfunction(skipped)\nendfunction()\n', encoding='utf-8'
     )
     out = tmp_path / 'out.md'
-    assert run('-t', template, '-o', out, tmp_path) == 0
+    assert run('-t', template, '-o', out, tmp_path, cwd=tmp_path) == 0
 
     text = out.read_text(encoding='utf-8')
     assert '## kept' in text
@@ -892,6 +900,44 @@ def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_pa
     assert 'undocumented_function' not in text
 
 
+def test_builtin_rst_template_documents_a_whole_project(cmake_file, tmp_path):
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert 'Reference\n=========' in text
+    assert 'example_add_library\n~~~~~~~~~~~~~~~~~~~' in text
+    assert ':param OUTPUT_NAME <value>: the artifact name' in text
+    assert '``EXAMPLE_BUILD_TESTS``' in text
+    assert 'undocumented_function' not in text
+
+
+def test_the_rst_template_emits_no_markdown(cmake_file, tmp_path):
+    """`symbol.pretty` is Markdown, so the rST template must not reach for it."""
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '```' not in text
+    assert '**' not in text
+    assert '## ' not in text
+
+
+def test_the_rst_output_parses_as_rst(cmake_file, tmp_path):
+    """Skipped where docutils is absent: it is nobody's declared dependency."""
+    docutils = pytest.importorskip('docutils.core')
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    # halt_level=2: a warning about the document is a malformed document here,
+    # and raises rather than being written to stderr.
+    docutils.publish_string(
+        out.read_text(encoding='utf-8'),
+        writer='null',
+        settings_overrides={'halt_level': 2, 'report_level': 5},
+    )
+
+
 def test_reference_template_lays_itself_out_by_group(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(
@@ -921,11 +967,12 @@ def test_reference_template_lays_itself_out_by_group(tmp_path):
     assert '## loose_one' in text
 
 
-def test_list_templates_names_both_builtins(capsys):
+def test_list_templates_names_every_builtin(capsys):
     assert run('--list-templates') == 0
     out = capsys.readouterr().out
     assert 'function.md.jinja' in out
     assert 'reference.md.jinja' in out
+    assert 'reference.rst.jinja' in out
 
 
 CONFIG = """\
@@ -935,7 +982,7 @@ path = ["."]
 """
 
 #: The smallest config file that renders the directory it is in.
-BASE_CONFIG = 'template = "function.md.jinja"\noutput = "out.md"\npath = "."\n'
+BASE_CONFIG = 'template = ["function.md.jinja"]\noutput = ["out.md"]\npath = ["."]\n'
 
 
 def write_config(directory, extra=''):
@@ -945,91 +992,75 @@ def write_config(directory, extra=''):
     return path
 
 
-def test_config_file_supplies_the_arguments(cmake_file, tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_config_file_supplies_the_arguments(cmake_file, tmp_path):
     (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     text = (tmp_path / 'docs' / 'reference.md').read_text(encoding='utf-8')
     assert '## example_add_library' in text
 
 
-def test_the_command_line_wins_over_the_config_file(
-    cmake_file, template, tmp_path, monkeypatch
-):
-    monkeypatch.chdir(tmp_path)
+def test_the_command_line_wins_over_the_config_file(cmake_file, template, tmp_path):
     (tmp_path / config.DEFAULT_FILE).write_text(CONFIG, encoding='utf-8')
     out = tmp_path / 'elsewhere.md'
-    assert run('-t', template, '-o', out) == 0
+    assert run('-t', template, '-o', out, cwd=tmp_path) == 0
     assert out.exists()
     assert not (tmp_path / 'docs').exists()
 
 
-def test_an_empty_config_file_says_nothing(tmp_path, monkeypatch, capsys):
-    monkeypatch.chdir(tmp_path)
+def test_an_empty_config_file_says_nothing(tmp_path, capsys):
     path = tmp_path / config.DEFAULT_FILE
     path.write_text('', encoding='utf-8')
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     # Naming the file that was read is the useful half: the settings were
     # expected to be in it.
     assert f'no --template given by {path}' in capsys.readouterr().err
 
 
-def test_no_config_file_at_all_says_so(tmp_path, monkeypatch, capsys):
-    monkeypatch.chdir(tmp_path)
+def test_no_config_file_at_all_says_so(tmp_path, capsys):
     (tmp_path / '.git').mkdir()
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     assert f'no --template given and no {config.DEFAULT_FILE} found' in (
         capsys.readouterr().err
     )
 
 
-def test_the_config_file_is_found_from_a_subdirectory(
-    cmake_file, tmp_path, monkeypatch
-):
+def test_the_config_file_is_found_from_a_subdirectory(cmake_file, tmp_path):
     # Where a project is configured and where its commands are run are not
     # the same place: a build directory is the usual one.
     write_config(tmp_path)
     build = tmp_path / 'build'
     build.mkdir()
-    monkeypatch.chdir(build)
-    assert run() == 0
+    assert run(cwd=build) == 0
     # Beside the config file, not beside the caller: a relative path in the
     # file would otherwise mean a different thing from every directory.
     assert (tmp_path / 'out.md').exists()
     assert not (build / 'out.md').exists()
 
 
-def test_the_search_stops_at_a_repository(cmake_file, tmp_path, monkeypatch, capsys):
+def test_the_search_stops_at_a_repository(cmake_file, tmp_path, capsys):
     write_config(tmp_path)
     inner = tmp_path / 'vendored'
     (inner / '.git').mkdir(parents=True)
-    monkeypatch.chdir(inner)
-    assert run() == 1
+    assert run(cwd=inner) == 1
     assert 'no --template given' in capsys.readouterr().err
 
 
-def test_a_builtin_template_named_in_the_config_file_stays_a_name(
-    cmake_file, tmp_path, monkeypatch
-):
+def test_a_builtin_template_named_in_the_config_file_stays_a_name(cmake_file, tmp_path):
     # Only a template that is really a file is read against the config file;
     # a built-in is a name, and resolving it would leave nothing to load.
     write_config(tmp_path)
     build = tmp_path / 'build'
     build.mkdir()
-    monkeypatch.chdir(build)
-    assert run() == 0
+    assert run(cwd=build) == 0
     assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
 
-def test_the_ignore_file_is_read_from_the_project_root(
-    cmake_file, tmp_path, monkeypatch
-):
+def test_the_ignore_file_is_read_from_the_project_root(cmake_file, tmp_path):
     write_config(tmp_path)
     (tmp_path / cli.IGNORE_FILE).write_text('CMakeLists.txt\n', encoding='utf-8')
     build = tmp_path / 'build'
     build.mkdir()
-    monkeypatch.chdir(build)
-    assert run() == 0
+    assert run(cwd=build) == 0
     # The only source there is was excluded, so nothing was documented.
     assert '## example_add_library' not in (tmp_path / 'out.md').read_text(
         encoding='utf-8'
@@ -1044,23 +1075,29 @@ def test_the_ignore_file_is_read_from_the_project_root(
         ('strict = "no"', 'strict must be true or false'),
         ('check = 1', 'check must be true or false'),
         ('json = 3', 'json must be a string'),
-        ('template = 3', 'template must be a string or a list of them'),
+        ('template = 3', 'template must be a list of strings'),
+        # A lone string is a mistake too, not a list of one: TOML says which
+        # of the two a value is, and the file should say what it means.
+        ('template = "reference.md.jinja"', 'template must be a list of strings'),
+        # An item of the list, not the list: TOML has types of its own.
+        ('template = [1]', 'template.0 must be a string'),
         ('tags = 3', '[tags] must be a table'),
+        ('[tags]\nauthor = { takes_name = "yes" }', 'takes_name must be true or false'),
+        ('[tags]\nauthor = { label = 1 }', 'author.label must be a string'),
+        # The dashed spelling of a setting is echoed as the file spells it.
+        ('require-docs = "yes"', 'require-docs must be true or false'),
+        ('require_docs = "yes"', 'require_docs must be true or false'),
     ],
 )
-def test_a_setting_of_the_wrong_type_is_refused(
-    setting, message, tmp_path, monkeypatch, capsys
-):
-    monkeypatch.chdir(tmp_path)
+def test_a_setting_of_the_wrong_type_is_refused(setting, message, tmp_path, capsys):
     (tmp_path / config.DEFAULT_FILE).write_text(f'{setting}\n', encoding='utf-8')
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     assert message in capsys.readouterr().err
 
 
-def test_an_unknown_setting_names_the_ones_there_are(tmp_path, monkeypatch, capsys):
-    monkeypatch.chdir(tmp_path)
+def test_an_unknown_setting_names_the_ones_there_are(tmp_path, capsys):
     (tmp_path / config.DEFAULT_FILE).write_text('nosuch = 1\n', encoding='utf-8')
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     err = capsys.readouterr().err
     assert 'has no setting called nosuch' in err
     assert 'template' in err
@@ -1071,61 +1108,47 @@ def test_a_named_config_file_must_exist(tmp_path, capsys):
     assert 'no config file at' in capsys.readouterr().err
 
 
-def test_a_named_config_file_is_read_from_anywhere(cmake_file, tmp_path, monkeypatch):
+def test_a_named_config_file_is_read_from_anywhere(cmake_file, tmp_path):
     path = write_config(tmp_path)
-    monkeypatch.chdir(tmp_path.parent)
-    assert run('--config', path) == 0
+    assert run('--config', path, cwd=tmp_path.parent) == 0
     assert (tmp_path / 'out.md').exists()
 
 
-def test_a_lone_string_is_accepted_where_a_list_belongs(
-    cmake_file, tmp_path, monkeypatch
-):
-    monkeypatch.chdir(tmp_path)
+def test_a_lone_string_is_accepted_where_a_list_belongs(cmake_file, tmp_path):
     write_config(tmp_path)
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert '## example_add_library' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
 
-def test_a_dash_in_a_setting_name_reads_as_an_underscore(
-    cmake_file, tmp_path, monkeypatch, capsys
-):
-    monkeypatch.chdir(tmp_path)
+def test_a_dash_in_a_setting_name_reads_as_an_underscore(cmake_file, tmp_path, capsys):
     write_config(tmp_path, 'require-docs = true\n')
     # The fixture has an undocumented function in it, which is what
     # require-docs is there to catch.
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     assert 'undocumented' in capsys.readouterr().err
 
 
 def test_no_strict_on_the_command_line_beats_the_config_file(
-    unknown_tag, tmp_path, monkeypatch, capsys
+    unknown_tag, tmp_path, capsys
 ):
     # A flag turned off explicitly is not the same as a flag left unsaid; the
     # file only fills in what the command line did not say.
-    monkeypatch.chdir(tmp_path)
     write_config(tmp_path, 'strict = true\n')
-    assert run('--no-strict') == 0
+    assert run('--no-strict', cwd=tmp_path) == 0
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
 
 
-def test_the_config_file_can_turn_strict_off(
-    unknown_tag, tmp_path, monkeypatch, capsys
-):
-    monkeypatch.chdir(tmp_path)
+def test_the_config_file_can_turn_strict_off(unknown_tag, tmp_path, capsys):
     write_config(tmp_path, 'strict = false\n')
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
 
 
-def test_no_check_on_the_command_line_beats_the_config_file(
-    cmake_file, tmp_path, monkeypatch
-):
+def test_no_check_on_the_command_line_beats_the_config_file(cmake_file, tmp_path):
     # check = true in the config file must not be the only way to write the
     # output; --no-check is how a run overrides it for once.
-    monkeypatch.chdir(tmp_path)
     write_config(tmp_path, 'check = true\n')
-    assert run('--no-check') == 0
+    assert run('--no-check', cwd=tmp_path) == 0
     assert (tmp_path / 'out.md').exists()
 
 
@@ -1138,38 +1161,35 @@ endfunction()
 """
 
 
-def test_a_tag_the_config_file_declares_is_rendered(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_a_tag_the_config_file_declares_is_rendered(tmp_path):
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
     write_config(tmp_path, '\n[tags]\nauthor = { label = "Author:" }\n')
     # Strict by default: an undeclared tag would fail the run instead.
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
 
-def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_a_declared_tag_without_a_label_is_labelled_after_itself(tmp_path):
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
     write_config(tmp_path, '\n[tags]\nauthor = {}\n')
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert '> **Author:** Alice' in (tmp_path / 'out.md').read_text(encoding='utf-8')
 
 
-def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path, monkeypatch):
+def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path):
     # str.capitalize() would lowercase everything after the first letter,
     # turning @seeAlso into 'Seealso:' rather than 'SeeAlso:'.
-    monkeypatch.chdir(tmp_path)
     (tmp_path / 'CMakeLists.txt').write_text(
         '# @brief Adds a thing.\n#\n# @seeAlso other_thing\n'
         'function(add_thing)\nendfunction()\n',
         encoding='utf-8',
     )
     write_config(tmp_path, '\n[tags]\nseeAlso = {}\n')
-    assert run() == 0
+    assert run(cwd=tmp_path) == 0
     assert '> **SeeAlso:** other_thing' in (tmp_path / 'out.md').read_text(
         encoding='utf-8'
     )
@@ -1186,15 +1206,12 @@ def test_a_declared_tags_default_label_keeps_its_inner_capitals(tmp_path, monkey
         ('author = { takes_name = "yes" }\n', 'takes_name must be true or false'),
     ],
 )
-def test_a_doubtful_tag_declaration_is_a_usage_error(
-    tags, message, tmp_path, monkeypatch, capsys
-):
-    monkeypatch.chdir(tmp_path)
+def test_a_doubtful_tag_declaration_is_a_usage_error(tags, message, tmp_path, capsys):
     (tmp_path / 'CMakeLists.txt').write_text(
         DOCUMENTED_WITH_A_CUSTOM_TAG, encoding='utf-8'
     )
     write_config(tmp_path, '\n[tags]\n' + tags)
-    assert run() == 1
+    assert run(cwd=tmp_path) == 1
     assert message in capsys.readouterr().err
 
 
@@ -1220,8 +1237,13 @@ def test_the_shipped_cmake_module_documents_itself(tmp_path):
     assert 'CHECK' not in text
 
 
-def test_defaults_cover_every_config_setting_but_json():
-    # cli.DEFAULTS is derived from config.KEYS precisely so the two cannot
-    # drift apart; this is the guard against a new List/Bool/Tags setting
-    # being added to one and forgotten in the other.
-    assert set(cli.DEFAULTS) == set(config.KEYS) - {'json'}
+def test_every_config_setting_has_a_default_and_an_option():
+    # The model is the one declaration of what the file may say: cli takes its
+    # defaults from it, and argparse must know every setting by the same name,
+    # or a setting given in the file would be dropped on the floor.
+    settings = {field.name for field in dataclasses.fields(config.Settings)}
+    known = vars(cli.build_arg_parser().parse_args(['x']))
+    # [tags] is the one setting with no option behind it: a vocabulary is a
+    # property of the project, not of a single run.
+    assert settings - {'tags'} <= set(known)
+    assert 'tags' in settings

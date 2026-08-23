@@ -1,9 +1,9 @@
 # An example project showing what cmake2md reads.
 #
 # Render it with:
-#   cmake2md --template examples/reference.md.jinja \
-#            --output examples/reference.md \
-#            examples/CMakeLists.txt
+#   cmake2md --template examples/md/reference.md.jinja \
+#            --output examples/md/reference.md \
+#            examples/md/CMakeLists.txt
 
 cmake_minimum_required(VERSION 3.20)
 project(example_project)

@@ -6,9 +6,9 @@ and uses jinja templates to generate final documentation.
 
 # Core documentation
 
-* @VISION.md - the core product vision, read it first.
+* @docs/VISION.md - the core product vision, read it first.
 * @README.md - the main user documentation.
-* @TODO.md - the plans.
+* @docs/TODO.md - the plans.
 
 # Development
 
@@ -25,6 +25,9 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * Use annotations.
 * Do not use `Any`, always set the strict direct type.
 * Avoid monkeypatch, use DI instead
+* Avoid using `isinstance()`, `getattr()`, `setattr()`, `vars()`
+* Prefer using dataclasses or named tuples instead of tuples
+* Prefer 400-500 LoC limit of .py files
 
 ## Generic
 
@@ -60,3 +63,4 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * Test with `make check`
 * Run `make check` before `git commit`
 * Do not write 'Co-Authored-By' in commit description
+* Avoid dropping files git history, prefer `git mv`

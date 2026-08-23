@@ -38,6 +38,10 @@ dependencies = [
     # only below 3.11, where tomllib is the same parser under another name:
     # one code path beats a version check and a branch almost nobody runs.
     "tomli>=2.0",
+    # Validates what that parser returns.  The floor is 2.12 rather than 2.0
+    # because pydantic-core publishes no wheel for Python 3.14 below it, and
+    # the CI matrix runs 3.14 on three operating systems.
+    "pydantic>=2.12,<3",
 ]
 
 [project.optional-dependencies]
@@ -89,6 +93,7 @@ order-by-type = false
 quote-style = "single"
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 python_version = "3.10"
 files = ["src", "tests"]
 strict = true

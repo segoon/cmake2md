@@ -33,7 +33,7 @@ jobs:
       # What "checked" means is decided by the Makefile, so a check added
       # there cannot be forgotten here.  This re-runs the tests the matrix
       # above already ran, which costs a second and keeps the two in step.
-      - run: make check example-check PYTHON=python
+      - run: make check example-check toc-check PYTHON=python
 
   package:
     runs-on: ubuntu-latest
@@ -55,7 +55,7 @@ jobs:
           /tmp/smoke/bin/cmake2md \
             --template function.md.jinja \
             --output /tmp/smoke/out.md \
-            examples/CMakeLists.txt
+            examples/md/CMakeLists.txt
           grep -q example_add_library /tmp/smoke/out.md
 
   ci-ok:

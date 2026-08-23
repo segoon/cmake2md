@@ -59,6 +59,13 @@
 
 ### Added
 
+- `reference.rst.jinja`, a third built-in template: the same whole document
+  as `reference.md.jinja` in reStructuredText, for a project whose
+  documentation is built with Sphinx. It uses only directives docutils itself
+  understands, so the output parses with or without Sphinx. Note that
+  `symbol.pretty` remains Markdown — it is rendered by `function.md.jinja` —
+  so this template, and any other that does not emit Markdown, lays symbols
+  out from `doc.args`, `doc.params` and the rest itself.
 - Tags a project declares itself, in the `[tags]` table of the config file. A
   declared tag opens a section like `@note` does — `text`, `takes_name` and
   `label` say how — so it is recognised rather than reported,
@@ -170,6 +177,20 @@
 - A config setting of the wrong type is refused rather than taken as it comes.
   `strict = "no"` used to turn strict *on*, every non-empty string being true;
   now it says so. The lists were already checked; the rest were not.
+- The config file is validated with [pydantic](https://docs.pydantic.dev/),
+  which is a new runtime dependency. One `Settings` model now declares what
+  `cmake2md.toml` may hold, of what type, and what each setting is worth when
+  unsaid — the command line reads its defaults from the same place. The
+  messages are unchanged: a `ValidationError` is translated into cmake2md's
+  own wording rather than shown as pydantic phrases it.
+- A list setting in `cmake2md.toml` must be a list. `template = "ref.md.jinja"`
+  used to be taken as a list of one, and `path = [1]` as the string `"1"`;
+  both are now refused, so that the file says what it means. Write
+  `template = ["ref.md.jinja"]`.
+- `examples/` is one directory per output flavour — `md/`, `rest/` and
+  `sphinx/` — each a self-contained project with its own `CMakeLists.txt`.
+  The paths of the old `examples/CMakeLists.txt` and
+  `examples/reference.md.jinja` have moved under `examples/md/`.
 
 ## 0.1.0 (2026-08-22)
 

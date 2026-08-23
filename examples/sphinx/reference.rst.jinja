@@ -1,0 +1,108 @@
+{#
+  reStructuredText for a Sphinx site, using the CMake domain that
+  sphinxcontrib-moderncmakedomain provides -- the one CMake's own
+  documentation is built with.
+
+  The difference from the built-in reference.rst.jinja is what a symbol
+  becomes: there, a section with a literal block; here, a `cmake:command`
+  directive, which Sphinx indexes and which `:cmake:command:` links to from
+  anywhere in the site.  The domain has no directive for a function as
+  distinct from a macro -- to CMake both are commands -- so both use it.
+
+  Sphinx-only directives are therefore fine here: `versionadded`,
+  `deprecated`, `code-block`.  Plain docutils will not parse this file.
+#}
+{% macro required(r) %}
+{%- if not r %}[{% endif %}
+{{- caller() }}
+{%- if not r %}]{% endif %}
+{%- endmacro %}
+
+{% macro about(arg) %}
+{%- if arg.type_ or arg.default %} ({% if arg.type_ %}{{ arg.type_ }}
+{%- endif %}{% if arg.type_ and arg.default %}, {% endif %}
+{%- if arg.default %}default ``{{ arg.default }}``{% endif %}){% endif %}
+{%- endmacro %}
+
+{# The argument list of the directive's signature, on one line. #}
+{% macro arglist(doc) %}
+{%- for arg in doc.args %}<{{ arg.name }}>{{ ' ' }}{% endfor %}
+{%- for arg in doc.options %}
+{%- call required(arg.required) %}{{ arg.name }}{% endcall %}{{ ' ' }}
+{%- endfor %}
+{%- for arg in doc.params %}
+{%- call required(arg.required) %}{{ arg.name }} <value>{% endcall %}{{ ' ' }}
+{%- endfor %}
+{%- for arg in doc.multi_params %}
+{%- call required(arg.required) %}{{ arg.name }} <value>...{% endcall %}{{ ' ' }}
+{%- endfor %}
+{%- endmacro %}
+
+{% macro signature(symbol) -%}
+{{ symbol.name }}({{ arglist(symbol.doc) | trim }})
+{%- endmacro %}
+
+{#
+  Everything below the directive line is its content, so it is indented by
+  three spaces -- descriptions, fields and nested directives alike.
+#}
+{% macro body(symbol) %}
+{%- if symbol.doc.brief %}
+{{ symbol.doc.brief }}
+{% endif %}
+{{ symbol.doc.description }}
+{% if symbol.doc.deprecated %}
+.. deprecated:: unreleased
+{% endif %}
+{%- for section in symbol.doc.of_kind('since') %}
+.. versionadded:: {{ section.text | trim }}
+{% endfor %}
+{%- for arg in symbol.doc.args %}
+:param {{ arg.name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endfor %}
+{%- for arg in symbol.doc.options %}
+:option {{ arg.name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endfor %}
+{%- for arg in symbol.doc.params %}
+:param {{ arg.name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endfor %}
+{%- for arg in symbol.doc.multi_params %}
+:param {{ arg.name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endfor %}
+{%- for arg in symbol.doc.returns %}
+:sets {{ arg.name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endfor %}
+{%- for example in symbol.doc.of_kind('example') %}
+
+.. code-block:: cmake
+
+   {{ example.text | trim | indent(3) }}
+{%- endfor %}
+{%- for section in symbol.doc.sections
+        if section.kind not in ['example', 'since', 'see', 'defgroup'] %}
+
+{% if section.kind in ['note', 'warning'] %}.. {{ section.kind }}::
+{% else %}.. admonition:: {{ section.label | trim | trim(':') }}
+{% endif %}
+   {{ section.text | trim | indent(3) }}
+{%- endfor %}
+{%- endmacro %}
+
+API reference
+=============
+{% for symbol in symbols | documented | public %}
+.. cmake:command:: {{ signature(symbol) }}
+
+   {{ body(symbol) | trim | indent(3) }}
+{% endfor %}
+Build options
+=============
+{% for variable in variables | documented | public %}
+.. cmake:variable:: {{ variable.name }}
+
+   {{ variable.docstring | unquote | oneline | trim | indent(3) }}
+{% if variable.choices %}
+   One of: {{ variable.choices | join(', ') }}.
+{% endif %}
+   Defaults to ``{{ variable.default | escape }}``.
+{% endfor %}
