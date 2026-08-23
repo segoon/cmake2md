@@ -25,7 +25,7 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * Use annotations.
 * Do not use `Any`, always set the strict direct type.
 * Avoid monkeypatch, use DI instead
-* Avoid using `isinstance()`, `getattr()`, `setattr()`
+* Avoid using `isinstance()`, `getattr()`, `setattr()`, `vars()`
 * Prefer using dataclasses or named tuples instead of tuples
 * Prefer 400-500 LoC limit of .py files
 
