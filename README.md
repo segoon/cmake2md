@@ -563,7 +563,7 @@ when one is added, so a consumer must ignore the fields it does not know.
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md): the workflow, how the modules fit
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): the workflow, how the modules fit
 together, and how to add a tag.
 
 ## Prior art
