@@ -8,10 +8,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Redundancy and duplication
 
-* The settings are listed twice, in `cli.DEFAULTS` and in `config.KEYS`, with
-  nothing keeping them in step — `json` is in one and not the other. One
-  table saying of each setting its kind, its default and whether it names a
-  path, read by both, would make the drift impossible.
 * `checks._FENCE_RE` and `rendering._FENCE_RE` are the same Markdown fence
   written twice, once capturing and once not.
 * `checks._group_problems` and `_misplaced_file_tag` each name their tag

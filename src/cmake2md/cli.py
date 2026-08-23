@@ -34,22 +34,27 @@ SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 #: File listing extra --exclude patterns, one per line, '#' starting a comment.
 IGNORE_FILE = '.cmake2mdignore'
 
+#: The empty value of each `config.Kind` that has one; a setting of that kind
+#: defaults to it unless `_DEFAULT_OVERRIDES` says otherwise.  `Kind.Str` is
+#: not here: `json`'s only setting of that kind takes no option on the command
+#: line, so it has no `None`-vs-unset ambiguity for a default to settle.
+_KIND_DEFAULTS: dict[config.Kind, list[str] | bool | dict[str, doc_parser.TagSpec]] = {
+    config.Kind.List: [],
+    config.Kind.Bool: False,
+    config.Kind.Tags: {},
+}
+#: Settings whose default is not their kind's empty value.
+_DEFAULT_OVERRIDES: dict[str, bool] = {'strict': True}
+
 #: What each optional argument is worth when neither the command line nor the
 #: config file says.  argparse leaves them all None instead, so that silence is
 #: told apart from an explicit --no-strict, which the config file must not win
-#: over.  'tags' is here without an option of its own: a vocabulary belongs in
-#: the config file, not on a command line.
+#: over.  Derived from `config.KEYS` so the two cannot drift apart: every
+#: setting a project can put in `cmake2md.toml` has a default here too.
 DEFAULTS: dict[str, list[str] | bool | dict[str, doc_parser.TagSpec]] = {
-    'tags': {},
-    'template': [],
-    'output': [],
-    'template_dir': [],
-    'exclude': [],
-    'path': [],
-    'inject': False,
-    'check': False,
-    'require_docs': False,
-    'strict': True,
+    name: _DEFAULT_OVERRIDES.get(name, _KIND_DEFAULTS[kind])
+    for name, kind in config.KEYS.items()
+    if kind in _KIND_DEFAULTS
 }
 
 

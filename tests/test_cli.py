@@ -1178,3 +1178,10 @@ def test_the_shipped_cmake_module_documents_itself(tmp_path):
     assert '**TARGET <value>** the name of the target to add' in text
     # The verifying target is derived from TARGET, not asked for by an option.
     assert 'CHECK' not in text
+
+
+def test_defaults_cover_every_config_setting_but_json():
+    # cli.DEFAULTS is derived from config.KEYS precisely so the two cannot
+    # drift apart; this is the guard against a new List/Bool/Tags setting
+    # being added to one and forgotten in the other.
+    assert set(cli.DEFAULTS) == set(config.KEYS) - {'json'}
