@@ -56,4 +56,6 @@ Python 3.10, mypy, ruff, pyproject.toml.
 ## Runtime
 
 * Use venv at .venv
-* test with `make check`
+* Test with `make check`
+* Run `make check` before `git commit`
+* Do not write 'Co-Authored-By' in commit description
