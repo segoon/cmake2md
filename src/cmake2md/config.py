@@ -227,6 +227,31 @@ def find(start: pathlib.Path) -> pathlib.Path | None:
     return None
 
 
+def _read_raw(path: pathlib.Path) -> _RawSettings:
+    """Validate `path` as a cmake2md.toml, or say what's wrong with it."""
+    try:
+        data: dict[str, object] = tomli.loads(path.read_text(encoding='utf-8'))
+    except OSError as exc:
+        raise UsageError(f'cannot read {path}: {exc.strerror}') from exc
+    except tomli.TOMLDecodeError as exc:
+        raise UsageError(f'{path} is not valid TOML: {exc}') from exc
+
+    try:
+        return _RawSettings.model_validate(data)
+    except pydantic.ValidationError as exc:
+        raise UsageError(_prose(path, exc, data)) from None
+
+
+def resolve(path: pathlib.Path | None) -> Settings:
+    """`path`'s settings, every field resolved — the file's own value where
+    it named one, cmake2md's own default otherwise — or cmake2md's own
+    defaults outright when there is no file at all.
+    """
+    if path is None:
+        return Settings.defaults()
+    return Settings.resolve(_read_raw(path), root=path.parent)
+
+
 def load(path: pathlib.Path) -> dict[str, Any]:
     """Read the settings `path` holds, which are the whole of it.
 
@@ -237,18 +262,7 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     An empty result means the file says nothing, which is not an error: a
     project may keep one for the sake of the tags alone.
     """
-    try:
-        data: dict[str, object] = tomli.loads(path.read_text(encoding='utf-8'))
-    except OSError as exc:
-        raise UsageError(f'cannot read {path}: {exc.strerror}') from exc
-    except tomli.TOMLDecodeError as exc:
-        raise UsageError(f'{path} is not valid TOML: {exc}') from exc
-
-    try:
-        raw = _RawSettings.model_validate(data)
-    except pydantic.ValidationError as exc:
-        raise UsageError(_prose(path, exc, data)) from None
-
+    raw = _read_raw(path)
     settings = Settings.resolve(raw, root=path.parent).as_arguments()
     written = {
         JSON_SETTING if field == JSON_FIELD else field for field in raw.model_fields_set

@@ -168,44 +168,46 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_config(args: argparse.Namespace, cwd: pathlib.Path) -> pathlib.Path | None:
-    """Fill in from the config file whatever the command line left unsaid.
-
-    The command line wins, always: a config file is where a project records
-    what it usually does, not something that can override what was just asked
-    for.  Returns the file it read, or None when there was none.
+def find_config(config_arg: str | None, cwd: pathlib.Path) -> pathlib.Path | None:
+    """The config file this run reads: `--config`'s value if given, else
+    the nearest cmake2md.toml at or above `cwd`.
     """
-    if args.config is None:
-        path = config.find(cwd)
-        if path is None:
-            return None
-    else:
-        path = pathlib.Path(args.config)
-        if not path.is_file():
-            raise UsageError(f'no config file at {path}')
-
-    for key, value in config.load(path).items():
-        current = vars(args).get(key)
-        # Nothing was said on the command line: None for a flag, and either
-        # None or empty for a list, which argparse fills in for a positional.
-        # False is not the same as unsaid — the file must not win over an
-        # explicit --no-strict.
-        if current is None or current == []:
-            vars(args)[key] = value
+    if config_arg is None:
+        return config.find(cwd)
+    path = pathlib.Path(config_arg)
+    if not path.is_file():
+        raise UsageError(f'no config file at {path}')
     return path
 
 
-def apply_defaults(args: argparse.Namespace) -> None:
-    """Settle whatever neither the command line nor the config file said.
+def resolve_args(ns: argparse.Namespace, file: config.Settings) -> config.Settings:
+    """The command line over `file` (already the config file over the
+    built-in defaults, via `config.resolve()`) — the command line always
+    wins, when it said anything at all.
 
-    The defaults are the config model's own, so a setting cannot be given one
-    there and another here.  A fresh `Settings.defaults()` each run also
-    means the empty list a run fills in is never the list another run
-    filled in.
+    The one place this module reads `argparse.Namespace` attributes, which
+    are untyped by construction; everything built from this function's
+    result is the typed `config.Settings` it returns.  A positional's
+    "nothing given" is `[]`, not `None` — `or` treats both as unsaid, same
+    as every list flag's `None`.
     """
-    for key, value in config.Settings.defaults().as_arguments().items():
-        if vars(args).get(key) is None:
-            vars(args)[key] = value
+    return config.Settings(
+        template=ns.template or file.template,
+        output=ns.output or file.output,
+        template_dir=ns.template_dir or file.template_dir,
+        path=ns.path or file.path,
+        exclude=ns.exclude or file.exclude,
+        json=ns.json if ns.json is not None else file.json,
+        inject=ns.inject if ns.inject is not None else file.inject,
+        check=ns.check if ns.check is not None else file.check,
+        require_docs=(
+            ns.require_docs if ns.require_docs is not None else file.require_docs
+        ),
+        strict=ns.strict if ns.strict is not None else file.strict,
+        # No --tags option: a vocabulary is a property of the project, not
+        # of a single run, so this only ever comes from the file.
+        tags=file.tags,
+    )
 
 
 class TemplateOutput(NamedTuple):
@@ -214,7 +216,7 @@ class TemplateOutput(NamedTuple):
 
 
 def validate_args(
-    args: argparse.Namespace, config_path: pathlib.Path | None = None
+    args: config.Settings, config_path: pathlib.Path | None = None
 ) -> list[TemplateOutput]:
     # Where the missing setting was meant to come from is the useful half of
     # the message: a run with no arguments at all is one that expected a
@@ -263,12 +265,12 @@ def validate_args(
     ]
 
 
-def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
-    if args.list_templates:
+def run(raw_args: argparse.Namespace, cwd: pathlib.Path) -> int:
+    if raw_args.list_templates:
         return list_templates()
 
-    config_path = apply_config(args, cwd)
-    apply_defaults(args)
+    config_path = find_config(raw_args.config, cwd)
+    args = resolve_args(raw_args, config.resolve(config_path))
     pairs = validate_args(args, config_path)
 
     # The project root: where the config file was found, and so what the
