@@ -34,29 +34,6 @@ SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 #: File listing extra --exclude patterns, one per line, '#' starting a comment.
 IGNORE_FILE = '.cmake2mdignore'
 
-#: The empty value of each `config.Kind` that has one; a setting of that kind
-#: defaults to it unless `_DEFAULT_OVERRIDES` says otherwise.  `Kind.Str` is
-#: not here: `json`'s only setting of that kind takes no option on the command
-#: line, so it has no `None`-vs-unset ambiguity for a default to settle.
-_KIND_DEFAULTS: dict[config.Kind, list[str] | bool | dict[str, doc_parser.TagSpec]] = {
-    config.Kind.List: [],
-    config.Kind.Bool: False,
-    config.Kind.Tags: {},
-}
-#: Settings whose default is not their kind's empty value.
-_DEFAULT_OVERRIDES: dict[str, bool] = {'strict': True}
-
-#: What each optional argument is worth when neither the command line nor the
-#: config file says.  argparse leaves them all None instead, so that silence is
-#: told apart from an explicit --no-strict, which the config file must not win
-#: over.  Derived from `config.KEYS` so the two cannot drift apart: every
-#: setting a project can put in `cmake2md.toml` has a default here too.
-DEFAULTS: dict[str, list[str] | bool | dict[str, doc_parser.TagSpec]] = {
-    name: _DEFAULT_OVERRIDES.get(name, _KIND_DEFAULTS[kind])
-    for name, kind in config.KEYS.items()
-    if kind in _KIND_DEFAULTS
-}
-
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -215,14 +192,14 @@ def apply_config(args: argparse.Namespace, cwd: pathlib.Path) -> pathlib.Path | 
 
 
 def apply_defaults(args: argparse.Namespace) -> None:
-    """Settle whatever neither the command line nor the config file said."""
-    for key, value in DEFAULTS.items():
-        if getattr(args, key, None) is not None:
-            continue
-        # A copy: the empty default must not be shared between runs.
-        if isinstance(value, (list, dict)):
-            setattr(args, key, value.copy())
-        else:
+    """Settle whatever neither the command line nor the config file said.
+
+    The defaults are the config model's own, so a setting cannot be given one
+    there and another here.  A fresh `Settings()` each run also means the
+    empty list a run fills in is never the list another run filled in.
+    """
+    for key, value in config.Settings().as_arguments().items():
+        if getattr(args, key, None) is None:
             setattr(args, key, value)
 
 

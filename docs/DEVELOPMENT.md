@@ -31,8 +31,24 @@ Each module has one job, and they stack:
 | `checks.py` | Where the comment and the code disagree. |
 | `rendering.py` | The Jinja environment, the template search path and the filters. |
 | `serialize.py` | The same model as JSON. |
-| `config.py` | The `cmake2md.toml` a project keeps beside its CMake code. |
+| `config.py` | The `cmake2md.toml` a project keeps beside its CMake code. `Settings` is the one declaration of what the file may say; `cli` reads its defaults from the same model. |
 | `cli.py` | Arguments, the passes over the sources, and writing the output. |
+
+## Adding a setting to the config file
+
+Add a field to `Settings` in `src/cmake2md/config.py` — its type is the check,
+its default is what `cli` fills in when nobody says otherwise — and add the
+matching option to `build_arg_parser()` with `default=None`, so that silence
+stays distinguishable from an explicit `--no-…`.
+
+A field that names a file is annotated `AgainstConfigFile()`, which is what
+reads it relative to the config file rather than to the working directory.
+
+pydantic's own message never reaches the user: `_prose()` translates a
+`ValidationError` into cmake2md's voice, and `_WRONG_TYPE` is the table it
+does it with. A new *kind* of error therefore needs a row there — without one
+the message falls back to pydantic's wording, which is a hint rather than a
+crash. Validators of ours raise `ValueError` with the final wording instead.
 
 ## Adding a tag
 

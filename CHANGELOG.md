@@ -177,6 +177,13 @@
 - A config setting of the wrong type is refused rather than taken as it comes.
   `strict = "no"` used to turn strict *on*, every non-empty string being true;
   now it says so. The lists were already checked; the rest were not.
+- The config file is validated with [pydantic](https://docs.pydantic.dev/),
+  which is a new runtime dependency. One `Settings` model now declares what
+  `cmake2md.toml` may hold, of what type, and what each setting is worth when
+  unsaid — the command line reads its defaults from the same place. The
+  messages are unchanged: a `ValidationError` is translated into cmake2md's
+  own wording rather than shown as pydantic phrases it. A list item is now
+  type-checked too, so `path = [1]` is refused where it used to pass.
 - `examples/` is one directory per output flavour — `md/`, `rest/` and
   `sphinx/` — each a self-contained project with its own `CMakeLists.txt`.
   The paths of the old `examples/CMakeLists.txt` and

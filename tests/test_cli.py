@@ -1075,7 +1075,14 @@ def test_the_ignore_file_is_read_from_the_project_root(cmake_file, tmp_path):
         ('check = 1', 'check must be true or false'),
         ('json = 3', 'json must be a string'),
         ('template = 3', 'template must be a string or a list of them'),
+        # An item of the list, not the list: TOML has types of its own.
+        ('template = [1]', 'template.0 must be a string'),
         ('tags = 3', '[tags] must be a table'),
+        ('[tags]\nauthor = { takes_name = "yes" }', 'takes_name must be true or false'),
+        ('[tags]\nauthor = { label = 1 }', 'author.label must be a string'),
+        # The dashed spelling of a setting is echoed as the file spells it.
+        ('require-docs = "yes"', 'require-docs must be true or false'),
+        ('require_docs = "yes"', 'require_docs must be true or false'),
     ],
 )
 def test_a_setting_of_the_wrong_type_is_refused(setting, message, tmp_path, capsys):
@@ -1115,6 +1122,15 @@ def test_a_dash_in_a_setting_name_reads_as_an_underscore(cmake_file, tmp_path, c
     # require-docs is there to catch.
     assert run(cwd=tmp_path) == 1
     assert 'undocumented' in capsys.readouterr().err
+
+
+def test_the_config_file_supplies_only_what_it_says(tmp_path):
+    # What the file leaves out must not arrive as a default: cli tells an
+    # unsaid setting from one turned off on purpose by whether it is there at
+    # all, and a default filled in here would beat an explicit --no-strict.
+    path = tmp_path / config.DEFAULT_FILE
+    path.write_text('strict = false\n', encoding='utf-8')
+    assert config.load(path) == {'strict': False}
 
 
 def test_no_strict_on_the_command_line_beats_the_config_file(
@@ -1226,8 +1242,13 @@ def test_the_shipped_cmake_module_documents_itself(tmp_path):
     assert 'CHECK' not in text
 
 
-def test_defaults_cover_every_config_setting_but_json():
-    # cli.DEFAULTS is derived from config.KEYS precisely so the two cannot
-    # drift apart; this is the guard against a new List/Bool/Tags setting
-    # being added to one and forgotten in the other.
-    assert set(cli.DEFAULTS) == set(config.KEYS) - {'json'}
+def test_every_config_setting_has_a_default_and_an_option():
+    # The model is the one declaration of what the file may say: cli takes its
+    # defaults from it, and argparse must know every setting by the same name,
+    # or a setting given in the file would be dropped on the floor.
+    settings = config.Settings().as_arguments()
+    known = vars(cli.build_arg_parser().parse_args(['x']))
+    # [tags] is the one setting with no option behind it: a vocabulary is a
+    # property of the project, not of a single run.
+    assert set(settings) - {'tags'} <= set(known)
+    assert 'tags' in settings
