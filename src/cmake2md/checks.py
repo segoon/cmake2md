@@ -9,6 +9,7 @@ The same idea applies to an ``@example``: the sample is CMake, so it can be
 parsed, which is as close to rustdoc's doc tests as a build language gets.
 """
 
+from collections.abc import Callable
 from collections.abc import Collection
 
 from . import parse
@@ -21,6 +22,15 @@ from .doc_parser import TagTarget
 
 #: Fence languages whose body is CMake and so worth parsing.
 _CMAKE_FENCES = frozenset({'', 'cmake'})
+
+#: Boolean fields a TagTarget.DocField spec may name. Keyed by TagSpec.field
+#: rather than read with getattr(), so a typo in a field name is a mypy error
+#: here instead of a silent False at runtime.
+_DOC_FIELD_FLAGS: dict[str, Callable[[DocComment], bool]] = {
+    'deprecated': lambda doc: doc.deprecated,
+    'internal': lambda doc: doc.internal,
+    'documents_file': lambda doc: doc.documents_file,
+}
 
 
 def tag(kind: ParamKind) -> str:
@@ -122,7 +132,7 @@ def _misplaced_block_only_tags(
                         section.line,
                     )
                 )
-        elif spec.target is TagTarget.DocField and getattr(doc, spec.field):
+        elif spec.target is TagTarget.DocField and _DOC_FIELD_FLAGS[spec.field](doc):
             warnings.append(
                 DocWarning(
                     f'@{name} in the documentation of {item.name} documents '

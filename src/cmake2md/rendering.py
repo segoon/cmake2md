@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterable
 from collections.abc import Sequence
 from typing import Any
+from typing import NamedTuple
 
 import jinja2
 
@@ -138,9 +139,12 @@ def collapse_blank_lines(text: str) -> str:
     return ''.join(out)
 
 
-def resolve_template_spec(
-    spec: str, cwd: pathlib.Path
-) -> tuple[pathlib.Path | None, str]:
+class TemplateSpec(NamedTuple):
+    search_dir: pathlib.Path | None
+    name: str
+
+
+def resolve_template_spec(spec: str, cwd: pathlib.Path) -> TemplateSpec:
     """Split a template argument into a search directory and a template name.
 
     A spec that names an existing file is loaded from its own directory, so
@@ -151,8 +155,8 @@ def resolve_template_spec(
     """
     path = cwd / spec
     if path.is_file():
-        return path.parent, path.name
-    return None, spec
+        return TemplateSpec(path.parent, path.name)
+    return TemplateSpec(None, spec)
 
 
 def builtin_loader() -> jinja2.PackageLoader:

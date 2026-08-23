@@ -10,6 +10,7 @@ import sys
 from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
+from typing import NamedTuple
 
 import jinja2
 
@@ -18,6 +19,18 @@ from . import doc_parser
 from . import parse
 from . import tag_lexer
 from .errors import ParseError
+
+
+class ReportKey(NamedTuple):
+    """De-duplicates a diagnostic about the same comment block.
+
+    An option()/set(... CACHE ...) call is read twice, once as a Command and
+    once as the Variable it also is, over the same comment; this is the key
+    that keeps its diagnostics from printing twice.
+    """
+
+    filepath: str
+    line: int
 
 
 def report(
@@ -46,7 +59,7 @@ def check_and_report(
     doc: doc_parser.DocComment,
     groups: frozenset[str],
     rules: DocRules,
-    reported: set[tuple[str, int]] | None,
+    reported: set[ReportKey] | None,
 ) -> None:
     """Report where `doc` disagrees with the code, or with the groups defined.
 
@@ -58,7 +71,7 @@ def check_and_report(
     item with no comment at all, which carries no warnings to begin with, so
     nothing is lost by not deduplicating that.
     """
-    key = (item.filepath, item.comments_line)
+    key = ReportKey(item.filepath, item.comments_line)
     if reported is None or item.comments_line == 0 or key not in reported:
         report(item, doc.warnings + checks.check(item, doc, groups), rules.strict)
         if reported is not None and item.comments_line:
@@ -69,7 +82,7 @@ def enrich(
     item: parse.Documented,
     rules: DocRules,
     groups: frozenset[str] = frozenset(),
-    reported: set[tuple[str, int]] | None = None,
+    reported: set[ReportKey] | None = None,
     *,
     check_now: bool = True,
 ) -> dict[str, Any]:

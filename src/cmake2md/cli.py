@@ -4,6 +4,7 @@ import argparse
 import pathlib
 import sys
 from collections.abc import Sequence
+from typing import NamedTuple
 
 import jinja2
 
@@ -184,13 +185,13 @@ def apply_config(args: argparse.Namespace, cwd: pathlib.Path) -> pathlib.Path | 
             raise UsageError(f'no config file at {path}')
 
     for key, value in config.load(path).items():
-        current = getattr(args, key, None)
+        current = vars(args).get(key)
         # Nothing was said on the command line: None for a flag, and either
         # None or empty for a list, which argparse fills in for a positional.
         # False is not the same as unsaid — the file must not win over an
         # explicit --no-strict.
         if current is None or current == []:
-            setattr(args, key, value)
+            vars(args)[key] = value
     return path
 
 
@@ -202,13 +203,18 @@ def apply_defaults(args: argparse.Namespace) -> None:
     empty list a run fills in is never the list another run filled in.
     """
     for key, value in config.Settings().as_arguments().items():
-        if getattr(args, key, None) is None:
-            setattr(args, key, value)
+        if vars(args).get(key) is None:
+            vars(args)[key] = value
+
+
+class TemplateOutput(NamedTuple):
+    template: str
+    output: str
 
 
 def validate_args(
     args: argparse.Namespace, config_path: pathlib.Path | None = None
-) -> list[tuple[str, str]]:
+) -> list[TemplateOutput]:
     # Where the missing setting was meant to come from is the useful half of
     # the message: a run with no arguments at all is one that expected a
     # config file to be found, and it was not.
@@ -250,7 +256,10 @@ def validate_args(
         seen[key] = template
 
     # The lengths are equal by the check above.
-    return list(zip(args.template, args.output, strict=True))
+    return [
+        TemplateOutput(template, out)
+        for template, out in zip(args.template, args.output, strict=True)
+    ]
 
 
 def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
@@ -265,12 +274,12 @@ def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
     # paths in it were read against.
     root = config_path.parent if config_path else cwd
 
-    specs = [rendering.resolve_template_spec(spec, cwd) for spec, _ in pairs]
+    specs = [rendering.resolve_template_spec(pair.template, cwd) for pair in pairs]
     # Most specific first: what the user asked for by -I, then the directory a
     # template was named by path from, and the working directory only as a
     # last resort before the built-ins.
     search_dirs = [pathlib.Path(d) for d in args.template_dir]
-    search_dirs += [d for d, _ in specs if d is not None]
+    search_dirs += [spec.search_dir for spec in specs if spec.search_dir is not None]
     search_dirs.append(cwd)
 
     env = rendering.build_environment(search_dirs)
@@ -299,7 +308,7 @@ def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
     # Shared across every enrich() call below: an option()/set(... CACHE ...)
     # is read once as a Command and once as the Variable it also is, over the
     # same comment, and this is what keeps its diagnostics from printing twice.
-    reported: set[tuple[str, int]] = set()
+    reported: set[pipeline.ReportKey] = set()
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
     # against, including an @ingroup inside a standalone block itself, so
@@ -337,14 +346,14 @@ def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
         else:
             ok &= output.write_output(pathlib.Path(args.json), content, args.check)
 
-    for (_, out), (_, name) in zip(pairs, specs, strict=True):
-        template = rendering.load_template(env, name, search_dirs)
+    for pair, spec in zip(pairs, specs, strict=True):
+        template = rendering.load_template(env, spec.name, search_dirs)
         content = rendering.render_document(template, context)
-        if out == STDOUT:
+        if pair.output == STDOUT:
             sys.stdout.write(content)
         else:
             ok &= output.write_output(
-                pathlib.Path(out), content, args.check, args.inject
+                pathlib.Path(pair.output), content, args.check, args.inject
             )
     return 0 if ok else 1
 

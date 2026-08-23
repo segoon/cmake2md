@@ -7,6 +7,7 @@ import re
 import textwrap
 from collections.abc import Iterator
 from collections.abc import Sequence
+from typing import NamedTuple
 
 import tree_sitter_cmake as tscmake
 from tree_sitter import Language
@@ -497,12 +498,18 @@ def extract_symbols(file: File) -> list[Symbol]:
     return symbols
 
 
-def command_calls(file: File) -> Iterator[tuple[Node, str, list[Node]]]:
+class CommandCall(NamedTuple):
+    node: Node
+    name: str
+    arguments: list[Node]
+
+
+def command_calls(file: File) -> Iterator[CommandCall]:
     """Every command call in the file, as (node, name, argument nodes)."""
     query_cursor = QueryCursor(COMMAND_QUERY)
     for _, captures in query_cursor.matches(file.tree.root_node):
         captured = captures.get('arguments')
-        yield (
+        yield CommandCall(
             captures['command'][0],
             file.get_text(captures['name'][0]),
             arguments_of(file, captured[0] if captured else None),
@@ -535,18 +542,22 @@ OPTION_TYPE = 'BOOL'
 OPTION_DEFAULT = 'OFF'
 
 
-def option_fields(file: File, arguments: Sequence[Node]) -> tuple[str, str, str]:
+class CacheFields(NamedTuple):
+    type_: str
+    default: str
+    docstring: str
+
+
+def option_fields(file: File, arguments: Sequence[Node]) -> CacheFields:
     """The type, default and help string of option(NAME "doc" [DEFAULT])."""
     default = (
         argument_name(file, arguments[2]) if len(arguments) > 2 else OPTION_DEFAULT
     )
     docstring = argument_name(file, arguments[1]) if len(arguments) > 1 else ''
-    return OPTION_TYPE, default, docstring
+    return CacheFields(OPTION_TYPE, default, docstring)
 
 
-def cache_set_fields(
-    file: File, arguments: Sequence[Node]
-) -> tuple[str, str, str] | None:
+def cache_set_fields(file: File, arguments: Sequence[Node]) -> CacheFields | None:
     """The type, default and help string of set(NAME ... CACHE TYPE "doc").
 
     None when the call writes no cache entry, which is the ordinary set() and
@@ -562,7 +573,7 @@ def cache_set_fields(
     default = ';'.join(names[1:cache])
     type_ = names[cache + 1] if len(names) > cache + 1 else ''
     docstring = names[cache + 2] if len(names) > cache + 2 else ''
-    return type_, default, docstring
+    return CacheFields(type_, default, docstring)
 
 
 def cache_choices(file: File) -> dict[str, list[str]]:
@@ -631,16 +642,15 @@ def extract_variables(file: File) -> list[Variable]:
         if fields is None:
             continue
 
-        type_, default, docstring = fields
         block = get_comments(file, command)
         entry = argument_name(file, arguments[0])
         variables.append(
             Variable(
                 name=entry,
                 command=name,
-                type_=type_,
-                default=default,
-                docstring=docstring,
+                type_=fields.type_,
+                default=fields.default,
+                docstring=fields.docstring,
                 choices=choices.get(entry),
                 advanced=entry in advanced,
                 comments=block.lines,
