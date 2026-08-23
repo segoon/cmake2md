@@ -11,33 +11,31 @@
 {%- if not r %}]{% endif %}
 {%- endmacro -%}
 
-{#
-  A @note or a @warning stands out as a blockquote; every line of it needs the
-  marker, hence the replace().
-#}
 {% macro about(arg) %}
 {%- if arg.type_ or arg.default %} ({% if arg.type_ %}{{ arg.type_ }}
 {%- endif %}{% if arg.type_ and arg.default %}, {% endif %}
 {%- if arg.default %}default `{{ arg.default }}`{% endif %}){% endif %}
 {%- endmacro %}
 
+{#
+  A @note or a @warning stands out as a blockquote; every line of it needs the
+  marker, hence the replace().
+#}
 {% macro quoted(label, text) %}
 > **{{ label }}** {{ text | replace('\n', '\n> ') }}
 {% endmacro %}
 
-{% macro sections(doc, kind, label) %}
-{%- for section in doc.of_kind(kind) %}
-{{ quoted(label, section.text) }}
-{%- endfor %}
-{%- endmacro %}
-
 {#
-  The tags rendered by name above; everything else — a tag the project
-  declared in [tool.cmake2md.tags] — falls through to its own label, so a
-  custom tag shows up without anyone writing a template for it.
+  Kinds rendered some other way below, so `other_sections` must not render
+  them a second time: @example as a code fence, @since as a sentence, @see as
+  a linked list, @defgroup as a group of its own rather than a symbol's
+  section. Not @brief: it never appears in doc.sections, @brief opens
+  doc.brief instead. @note, @warning and @todo need no entry here — they read
+  the same as any tag a project declares itself, `> **{{ label }}** …`, and
+  their label already says 'Note:'/'Warning:'/'TODO:' without the template
+  naming them.
 #}
-{% set rendered_kinds = ['brief', 'example', 'note', 'warning', 'todo',
-                         'since', 'see', 'defgroup'] %}
+{% set rendered_kinds = ['example', 'since', 'see', 'defgroup'] %}
 {% macro other_sections(doc) %}
 {%- for section in doc.sections if section.kind not in rendered_kinds %}
 {{ quoted(section.label, section.text) }}
@@ -97,9 +95,6 @@ Sets in the caller's scope:
 {{ example.text }}
 ```{% endif %}
 {%- endfor %}
-{{ sections(symbol.doc, 'note', 'Note:') }}
-{{- sections(symbol.doc, 'warning', 'Warning:') }}
-{{- sections(symbol.doc, 'todo', 'TODO:') }}
 {%- for section in symbol.doc.of_kind('since') %}
 *Since {{ section.text }}.*
 {% endfor %}
@@ -107,7 +102,7 @@ Sets in the caller's scope:
 See also: {{ symbol.doc.of_kind('see') | map(attribute='text')
                    | map('symbol_link', symbols | default([])) | join(', ') }}
 {% endif %}
-{{- other_sections(symbol.doc) }}
+{{ other_sections(symbol.doc) }}
 {%- endmacro -%}
 
 {% if symbol is defined %}

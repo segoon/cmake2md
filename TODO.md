@@ -8,14 +8,6 @@ hands templates raw argument lists, which is where every comparable tool
 
 ## Redundancy and duplication
 
-* `function.md.jinja` hardcodes `Note:`, `Warning:` and `TODO:`, and lists
-  the kinds it renders by name, although `Section.label` already carries
-  those strings from `PROSE_TAGS`. Adding a built-in prose tag today means
-  editing the template as well as `doc_parser.py`. Render every section
-  through `section.label`, keeping only the genuinely special cases
-  (`example`, `since`, `see`).
-* `rendered_kinds` in that template includes `brief`, which is a
-  `TagTarget.Summary` and never appears in `doc.sections`.
 * `parse.cache_choices` computes `words.index('PROPERTY')` twice.
 * The context entry is `dict[str, Any]` throughout `cli`, `rendering` and
   `serialize`, which is the `Any` the project's own rules rule out. A small

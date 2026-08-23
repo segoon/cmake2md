@@ -270,6 +270,8 @@ SECTIONED_SOURCE = """\
 # The longer description.
 #
 # @note Call it early.
+# @warning Not thread safe.
+# @todo support OBJECT libraries
 # @example
 # add_thing(NAME x)
 function(add_thing)
@@ -293,6 +295,8 @@ def test_builtin_template_renders_the_new_sections(tmp_path):
     assert 'Adds a thing.' in text
     assert 'The longer description.' in text
     assert '> **Note:** Call it early.' in text
+    assert '> **Warning:** Not thread safe.' in text
+    assert '> **TODO:** support OBJECT libraries' in text
     # Once: the fallback that renders a declared tag must not also render the
     # sections the template already knows by name.
     assert text.count('Call it early.') == 1
