@@ -1,7 +1,7 @@
 # A small project rendered into Sphinx CMake-domain directives.
 #
 # Render it with:
-#   cmake2md --template examples/sphinx/reference.rst.jinja \
+#   cmake2doc --template examples/sphinx/reference.rst.jinja \
 #            --output examples/sphinx/reference.rst \
 #            examples/sphinx/CMakeLists.txt
 

@@ -690,7 +690,7 @@ def parse_file(path: str | pathlib.Path) -> File:
     except UnicodeDecodeError as exc:
         line = content.count(b'\n', 0, exc.start) + 1
         raise Cmake2mdError(
-            f'{path}:{line}: not valid UTF-8; cmake2md expects UTF-8 sources'
+            f'{path}:{line}: not valid UTF-8; cmake2doc expects UTF-8 sources'
         ) from exc
 
     return File(filepath=str(path), content=content, tree=PARSER.parse(content))

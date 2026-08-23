@@ -8,7 +8,7 @@ reStructuredText.
 From the repository root:
 
 ```shell
-cmake2md \
+cmake2doc \
     --template examples/sphinx/reference.rst.jinja \
     --output examples/sphinx/reference.rst \
     examples/sphinx/CMakeLists.txt

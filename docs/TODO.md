@@ -13,7 +13,7 @@
 
 ## From the CMinx comparison
 
-Candidates, not decisions — raised by comparing cmake2md with
+Candidates, not decisions — raised by comparing cmake2doc with
 [CMinx](https://github.com/CMakePP/CMinx), the other CMake documentation
 generator. Two of the four are done: `reference.rst.jinja` ships as a built-in
 and the prior-art table now says when to pick CMinx. `include()` following
@@ -45,7 +45,7 @@ Recorded so they are not revisited: `@copydoc`, following `include()` and
 
 reStructuredText output used to be on this list, on the grounds that CMinx and
 upstream CMake cover it. It came off once the CMinx comparison made the cost
-plain: cmake2md renders through Jinja, so rST is a template rather than a
+plain: cmake2doc renders through Jinja, so rST is a template rather than a
 backend. What is still not on the roadmap is *building* a site — no Sphinx
-project, no `conf.py`, no HTML. cmake2md writes the source file; what renders
+project, no `conf.py`, no HTML. cmake2doc writes the source file; what renders
 it is the project's business.

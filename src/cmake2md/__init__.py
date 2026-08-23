@@ -1,4 +1,4 @@
-"""cmake2md: documentation generator for CMake.
+"""cmake2doc: documentation generator for CMake.
 
 Kept free of the tree-sitter import so that the pure-Python parts of the
 package can be imported (and tested) on their own.

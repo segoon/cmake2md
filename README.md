@@ -1,13 +1,13 @@
-# cmake2md
+# cmake2doc
 
-[![CI](https://github.com/segoon/cmake2md/actions/workflows/ci.yml/badge.svg)](https://github.com/segoon/cmake2md/actions/workflows/ci.yml)
+[![CI](https://github.com/segoon/cmake2doc/actions/workflows/ci.yml/badge.svg)](https://github.com/segoon/cmake2doc/actions/workflows/ci.yml)
 
 Documentation generator for CMake. It parses CMake sources with
 [tree-sitter](https://tree-sitter.github.io/), extracts doxygen-like comments
 from `function()` definitions and command calls, and renders them through your
 own [Jinja](https://jinja.palletsprojects.com/) templates.
 
-Nothing about the output format is baked in: cmake2md hands your template a
+Nothing about the output format is baked in: cmake2doc hands your template a
 parsed model of the file and gets out of the way.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -53,10 +53,10 @@ parsed model of the file and gets out of the way.
 * `--inject` to keep generated docs inside an existing file, such as a
   README, between two markers.
 * `--check` for CI, to fail a pipeline when generated docs are stale.
-* A `cmake2md.toml` config file, so a whole project's generation settings
+* A `cmake2doc.toml` config file, so a whole project's generation settings
   live in one place instead of scattered across a Makefile and workflow
   files.
-* A `cmake/cmake2md.cmake` module to run cmake2md as part of the build.
+* A `cmake/cmake2doc.cmake` module to run cmake2doc as part of the build.
 * `--json` output for tools that aren't templates.
 * Cross-platform: Linux, macOS and Windows.
 
@@ -76,9 +76,9 @@ Ubuntu 22.04 or newer official repository already has the python of the required
 ### Installation
 
 ```shell
-pipx install cmake2md
+pipx install cmake2doc
 # Or:
-pip install cmake2md
+pip install cmake2doc
 ```
 
 ### Quick start
@@ -100,7 +100,7 @@ endfunction()
 Render it with the built-in template:
 
 ```shell
-cmake2md --template function.md.jinja --output docs/reference.md CMakeLists.txt
+cmake2doc --template function.md.jinja --output docs/reference.md CMakeLists.txt
 ```
 
 That function becomes `docs/reference.md`:
@@ -126,7 +126,7 @@ example_add_library(
 ````
 
 A complete, runnable example lives in
-[`examples/`](https://github.com/segoon/cmake2md/tree/master/examples) — one
+[`examples/`](https://github.com/segoon/cmake2doc/tree/master/examples) — one
 per output flavour: Markdown, reStructuredText, and reStructuredText using
 Sphinx's CMake domain.
 
@@ -188,7 +188,7 @@ start of a word — for instance when prose mentions a tag, as in
 `not tagged with @@ingroup`.
 
 Two things are left in the text and reported rather than acted on: a tag
-cmake2md does not recognise, and a known tag that is not followed by something
+cmake2doc does not recognise, and a known tag that is not followed by something
 that looks like a name (`@ingroup, so …` is prose, not a group named `,`).
 Both fail the run; pass `--no-strict` to have them reported as warnings and
 carry on. A tag that takes a name but has nothing at all after it — not even
@@ -199,7 +199,7 @@ under `--no-strict`.
 ### Checking the comment against the code
 
 A CMake function states its interface twice — once in the doc comment, once in
-its own body — and the two drift apart. cmake2md reads the second one and
+its own body — and the two drift apart. cmake2doc reads the second one and
 fails the run on the disagreement:
 
 ```cmake
@@ -211,7 +211,7 @@ endfunction()
 ```
 
 ```
-cmake2md: error: CMakeLists.txt:2: function example_add_library: SRCS is
+cmake2doc: error: CMakeLists.txt:2: function example_add_library: SRCS is
 documented as @multiparam but example_add_library does not accept it
 ```
 
@@ -242,7 +242,7 @@ unchecked. A symbol with no doc comment at all is not reported either — that
 is what `--require-docs` is for — but one documented at all, even with no
 parameter mentioned yet, is checked against its own code from the start.
 
-An `@example` is checked the same way: it is CMake, so cmake2md parses it and
+An `@example` is checked the same way: it is CMake, so cmake2doc parses it and
 reports a sample that does not parse. Prose or another language belongs in a
 fenced code block, which is left alone unless it is fenced as `cmake`.
 
@@ -253,7 +253,7 @@ fenced code block, which is left alone unless it is fenced as `cmake`.
 ### Command line
 
 ```
-cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
+cmake2doc [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
          [--json OUTPUT] [--exclude PATTERN]... [--require-docs]
          [--strict] [--check] CMAKE_FILE...
 ```
@@ -263,7 +263,7 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
 | `-t`, `--template` | Template to render: a path, or the name of a built-in. Repeatable. |
 | `-o`, `--output` | Where to write the matching `--template`, or `-` for stdout. Repeatable, paired in order. |
 | `-I`, `--template-dir` | Extra directory to search for templates. Repeatable. |
-| `-c`, `--config` | Read the arguments from this TOML file instead of the nearest `cmake2md.toml`. |
+| `-c`, `--config` | Read the arguments from this TOML file instead of the nearest `cmake2doc.toml`. |
 | `--inject` / `--no-inject` | Write between the markers of an existing `--output` file instead of replacing it. |
 | `--json` | Also write the parsed model as JSON, for tools that are not templates. |
 | `--exclude` | Skip sources matching a glob, against the whole path or the file name. Repeatable. |
@@ -274,11 +274,11 @@ cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
 | `--version` | Print the version and exit. |
 
 Each of `--inject`, `--require-docs`, `--strict` and `--check` has a `--no-`
-form, so any of them recorded as `true` in `cmake2md.toml` can still be
+form, so any of them recorded as `true` in `cmake2doc.toml` can still be
 turned off for one run.
 
 Each `CMAKE_FILE` is a file, a directory to search for `CMakeLists.txt` and
-`*.cmake` (dot-directories are skipped), or a glob pattern. cmake2md expands
+`*.cmake` (dot-directories are skipped), or a glob pattern. cmake2doc expands
 directories and patterns itself, so it behaves the same in shells that do not,
 such as those on Windows.
 
@@ -291,14 +291,14 @@ differs, since nobody in CI can re-run the generator to find out.
 starting with `_` is private by CMake convention, and `@internal` says so
 outright; neither is required to be documented.
 
-A `.cmake2mdignore` file at the project root lists further `--exclude`
+A `.cmake2docignore` file at the project root lists further `--exclude`
 patterns, one per line, `#` starting a comment.
 
 #### The config file
 
 A CI step that renders three templates needs six paired arguments to say so,
 and they then have to be kept in step across a Makefile, a workflow file and a
-pre-commit hook. Say it once instead, in `cmake2md.toml` beside your CMake
+pre-commit hook. Say it once instead, in `cmake2doc.toml` beside your CMake
 code:
 
 ```toml
@@ -308,21 +308,21 @@ path = ["."]
 require-docs = true
 ```
 
-and the CI step is `cmake2md` with nothing after it. Every long option has a
+and the CI step is `cmake2doc` with nothing after it. Every long option has a
 setting of the same name, with `-` or `_` between words. A setting of the
 wrong type is refused rather than coerced, down to the items of a list:
 `strict = "no"` is a string, and every non-empty string is true, so taking it
 would mean doing the opposite of what it says; `template = "reference.md.jinja"`
 is a string where a list belongs, and `template = [1]` a number where a name
 does. Anything given on
-the command line wins over the file, so `cmake2md --output - .` still prints to
+the command line wins over the file, so `cmake2doc --output - .` still prints to
 the terminal — and a flag turned off explicitly counts as given, so
 `--no-strict` wins over a `strict = true` in the file.
 
 The file is looked for in the working directory and then in each directory
-above it, stopping at a repository, so `cmake2md` does the same thing from a
+above it, stopping at a repository, so `cmake2doc` does the same thing from a
 build directory as from the project root. **A relative path in it is relative
-to the file**, not to wherever cmake2md was run from — otherwise `output =
+to the file**, not to wherever cmake2doc was run from — otherwise `output =
 "docs/reference.md"` would name a different file from every directory. A
 template that is not a file is left as written, so a built-in name still names
 a built-in. `--config` names a different file, which must then exist, and its
@@ -349,15 +349,15 @@ around them alone. It composes with `--check`.
 
 ### From CMake
 
-`cmake/cmake2md.cmake` adds targets that run cmake2md as part of the build, so
+`cmake/cmake2doc.cmake` adds targets that run cmake2doc as part of the build, so
 a project documents its own CMake code without a separate script to remember.
 Copy it into your module path, or fetch it:
 
 ```cmake
-include(cmake2md)
+include(cmake2doc)
 
-# All options are read from cmake2md.toml
-cmake2md_generate(
+# All options are read from cmake2doc.toml
+cmake2doc_generate(
     # `cmake --build build --target docs` regenerates the documentation.
     # A second target, `docs-check`, verifies instead that it is up to date
     # and fails with a diff when it is not, which is what a CI job wants.
@@ -368,10 +368,10 @@ cmake2md_generate(
 ```
 
 That is the whole of it: what to render, where to write it and which files to
-read are in `cmake2md.toml`, said once. The targets run cmake2md from the
+read are in `cmake2doc.toml`, said once. The targets run cmake2doc from the
 current source directory, which is where it looks for that file.
 
-The module is documented with cmake2md's own tags, so it also serves as a
+The module is documented with cmake2doc's own tags, so it also serves as a
 worked example.
 
 ### In CI
@@ -380,20 +380,20 @@ A pre-commit hook:
 
 ```yaml
 repos:
-  - repo: https://github.com/segoon/cmake2md
+  - repo: https://github.com/segoon/cmake2doc
     rev: v0.1.0
     hooks:
-      - id: cmake2md-check
+      - id: cmake2doc-check
         args: [--template, reference.md.jinja, --output, docs/reference.md, .]
 ```
 
-`cmake2md-check` fails when the documentation is out of date and shows what
-differs; `cmake2md` regenerates it instead, so the commit picks it up.
+`cmake2doc-check` fails when the documentation is out of date and shows what
+differs; `cmake2doc` regenerates it instead, so the commit picks it up.
 
 A GitHub Action:
 
 ```yaml
-- uses: segoon/cmake2md@v0.1.0
+- uses: segoon/cmake2doc@v0.1.0
   with:
     args: --check --template reference.md.jinja --output docs/reference.md .
 ```
@@ -507,7 +507,7 @@ to configure, so it is not in the list; it is still in `commands`. A
 
 #### The built-in templates
 
-Three templates ship with cmake2md, and `--list-templates` names them.
+Three templates ship with cmake2doc, and `--list-templates` names them.
 
 `reference.md.jinja` is a whole document: a table of contents, every
 documented function and macro laid out by `@defgroup`, and a table of the
@@ -515,7 +515,7 @@ build options. A project that wants documentation without writing a template
 needs only:
 
 ```sh
-cmake2md --template reference.md.jinja --output docs/reference.md .
+cmake2doc --template reference.md.jinja --output docs/reference.md .
 ```
 
 `reference.rst.jinja` is the same document in reStructuredText, for a project
@@ -524,7 +524,7 @@ itself understands — `code`, `note`, `warning`, `admonition`, `list-table` —
 so the output parses with or without Sphinx, and `.. contents::` leaves the
 table of contents to the renderer. For Sphinx's CMake domain
 (`.. cmake:command::`, and the cross-references that come with it) see
-[`examples/sphinx/`](https://github.com/segoon/cmake2md/tree/master/examples/sphinx),
+[`examples/sphinx/`](https://github.com/segoon/cmake2doc/tree/master/examples/sphinx),
 which is a template rather than a built-in because the domain is an extension
 a site either installs or does not.
 
@@ -541,7 +541,7 @@ symbols out from `doc.args`, `doc.params` and the rest itself. Read
 
 ### Tags of your own
 
-The vocabulary above is what cmake2md means by a tag; what a *project* wants to
+The vocabulary above is what cmake2doc means by a tag; what a *project* wants to
 record — an owner, a rationale, a ticket — is its own business. Declare it in
 the config file:
 
@@ -589,26 +589,26 @@ together, and how to add a tag.
 
 ## Prior art
 
-cmake2md is a Markdown generator for CMake with a checking pass, which is a
+cmake2doc is a Markdown generator for CMake with a checking pass, which is a
 gap between two neighbourhoods rather than new ground:
 
 | | |
 |---|---|
 | [Doxygen](https://www.doxygen.nl/) | Where the `@tag` vocabulary comes from, down to a paragraph tag ending at a blank line. It has no CMake parser. |
-| [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2md does, and targets a Sphinx site: reStructuredText is what it emits, and the docstrings are written in it. cmake2md renders through templates, so it emits either — but a project already built with Sphinx will find CMinx the closer fit. |
+| [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2doc does, and targets a Sphinx site: reStructuredText is what it emits, and the docstrings are written in it. cmake2doc renders through templates, so it emits either — but a project already built with Sphinx will find CMinx the closer fit. |
 | CMake's own [Sphinx domain](https://github.com/Kitware/CMake/blob/master/Help/dev/documentation.rst) | Where the `#[==[.rst:` comment style comes from, and how CMake's own modules are documented. |
 | [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
 | [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |
 | [shdoc](https://github.com/reconquest/shdoc) | The same shape of problem for shell: a dynamic language whose interface is only stated in comments. |
 
-Where cmake2md differs from all of them is the checking pass: the doc comment
+Where cmake2doc differs from all of them is the checking pass: the doc comment
 is compared against what the CMake code actually accepts, and the two are
 reported when they disagree.
 
 ## License
 
 Apache License 2.0 — see
-[LICENSE](https://github.com/segoon/cmake2md/blob/master/LICENSE) and
-[NOTICE](https://github.com/segoon/cmake2md/blob/master/NOTICE).
-cmake2md started life as a set of scripts inside the
+[LICENSE](https://github.com/segoon/cmake2doc/blob/master/LICENSE) and
+[NOTICE](https://github.com/segoon/cmake2doc/blob/master/NOTICE).
+cmake2doc started life as a set of scripts inside the
 [userver](https://github.com/userver-framework/userver) framework.

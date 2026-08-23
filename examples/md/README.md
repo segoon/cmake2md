@@ -8,7 +8,7 @@ macro sections and grouped option tables.
 From the repository root:
 
 ```shell
-cmake2md \
+cmake2doc \
     --template examples/md/reference.md.jinja \
     --output examples/md/reference.md \
     examples/md/CMakeLists.txt

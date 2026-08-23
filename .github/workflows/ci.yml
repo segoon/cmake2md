@@ -51,8 +51,8 @@ jobs:
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install dist/*.whl
-          /tmp/smoke/bin/cmake2md --version
-          /tmp/smoke/bin/cmake2md \
+          /tmp/smoke/bin/cmake2doc --version
+          /tmp/smoke/bin/cmake2doc \
             --template function.md.jinja \
             --output /tmp/smoke/out.md \
             examples/md/CMakeLists.txt

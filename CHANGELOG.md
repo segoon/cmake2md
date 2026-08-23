@@ -9,7 +9,7 @@
   a tag left with nothing after it but a newline reports the existing
   "requires a name" error instead of silently taking the next line's first
   word as its name.
-- `output = "-"` and `json = "-"` in `cmake2md.toml`, which mean "write to
+- `output = "-"` and `json = "-"` in `cmake2doc.toml`, which mean "write to
   stdout", are no longer resolved against the config file's directory into a
   file literally called `-`.
 - A diagnostic about an `option()` or `set(... CACHE ...)` call is no longer
@@ -29,13 +29,13 @@
   only when a template rendered `function.md.jinja` as a whole document. The
   built-in `reference.md.jinja`, and any template reaching a symbol through
   `symbol.pretty`, now link it the same way.
-- An unwritable output directory or an unreadable `.cmake2mdignore` is
+- An unwritable output directory or an unreadable `.cmake2docignore` is
   reported as a sentence naming the file, like every other I/O problem
   already was, instead of a Python traceback.
 - `--check`, `--inject` and `--require-docs` accept `--no-check`,
   `--no-inject` and `--no-require-docs`, like `--strict` already accepted
   `--no-strict`, so a project that records one of them as `true` in
-  `cmake2md.toml` can still turn it off for one run.
+  `cmake2doc.toml` can still turn it off for one run.
 - `--json` no longer needs a `--template`/`--output` pair alongside it; a
   consumer that wants only the parsed model no longer has to invent a
   throwaway one.
@@ -71,16 +71,16 @@
   `label` say how — so it is recognised rather than reported,
   reachable as `doc.of_kind('author')`, and rendered by the built-in template
   under its label without anyone writing a template.
-- `cmake/cmake2md.cmake`, a module whose `cmake2md_generate(TARGET docs)` adds
-  two build targets that run cmake2md — one that writes the documentation and
+- `cmake/cmake2doc.cmake`, a module whose `cmake2doc_generate(TARGET docs)` adds
+  two build targets that run cmake2doc — one that writes the documentation and
   a `-check` companion that verifies it — so a CMake project can document
   itself from its own build. `TARGET` is all it takes: the rest is in
-  `cmake2md.toml`, and a target that repeated any of it would be a second
-  place to keep in step. It is written with cmake2md's own tags, and the test
+  `cmake2doc.toml`, and a target that repeated any of it would be a second
+  place to keep in step. It is written with cmake2doc's own tags, and the test
   suite holds it to `--strict`.
-- A config file: the nearest `cmake2md.toml` at or above the working
+- A config file: the nearest `cmake2doc.toml` at or above the working
   directory, or any TOML file named with `--config`, so a CI step is
-  `cmake2md` and nothing else. A relative path in it is relative to the file,
+  `cmake2doc` and nothing else. A relative path in it is relative to the file,
   so the run means the same thing from a build directory as from the project
   root. The command line always wins over it.
 - Bracket comments (`#[[ … ]]`) document a symbol like `#` comments do,
@@ -95,13 +95,13 @@
 - A second built-in template, `reference.md.jinja`: a whole document with a
   table of contents, laid out by `@defgroup`, so a project needs no template
   of its own.
-- A pre-commit hook (`cmake2md-check` and `cmake2md`) and a GitHub Action.
+- A pre-commit hook (`cmake2doc-check` and `cmake2doc`) and a GitHub Action.
 - `--json OUTPUT` writes the parsed model as JSON, under a `schema_version`
   that is bumped only when a field disappears or changes meaning.
 - `--require-docs` fails the run on a public `function()` or `macro()` with no
   doc comment, like rustdoc's `missing_docs`. A leading `_` and `@internal`
   both mean private.
-- `--exclude PATTERN`, repeatable, and a `.cmake2mdignore` file listing more
+- `--exclude PATTERN`, repeatable, and a `.cmake2docignore` file listing more
   of the same.
 - `@type` and `@default` refine the parameter written above them, as
   `@required` already did, and the built-in template prints them.
@@ -179,11 +179,11 @@
   now it says so. The lists were already checked; the rest were not.
 - The config file is validated with [pydantic](https://docs.pydantic.dev/),
   which is a new runtime dependency. One `Settings` model now declares what
-  `cmake2md.toml` may hold, of what type, and what each setting is worth when
+  `cmake2doc.toml` may hold, of what type, and what each setting is worth when
   unsaid — the command line reads its defaults from the same place. The
-  messages are unchanged: a `ValidationError` is translated into cmake2md's
+  messages are unchanged: a `ValidationError` is translated into cmake2doc's
   own wording rather than shown as pydantic phrases it.
-- A list setting in `cmake2md.toml` must be a list. `template = "ref.md.jinja"`
+- A list setting in `cmake2doc.toml` must be a list. `template = "ref.md.jinja"`
   used to be taken as a list of one, and `path = [1]` as the string `"1"`;
   both are now refused, so that the file says what it means. Write
   `template = ["ref.md.jinja"]`.
@@ -199,7 +199,7 @@ First release as a standalone project, extracted from the
 
 ### Added
 
-- Installable `cmake2md` package and console script, published on PyPI.
+- Installable `cmake2doc` package and console script, published on PyPI.
 - `macro()` definitions are documented alongside `function()` ones; templates
   tell them apart with `symbol.type_`.
 - `documented` filter, so templates can leave out symbols and commands that
@@ -207,7 +207,7 @@ First release as a standalone project, extracted from the
 - `--version`.
 - Templates are resolved from `--template-dir`, the working directory and the
   packaged built-ins, so projects can ship their own without vendoring
-  cmake2md. The built-in `function.md.jinja` can be shadowed to change how
+  cmake2doc. The built-in `function.md.jinja` can be shadowed to change how
   `symbol.pretty` is rendered, and can itself be passed to `--template` to
   document every function without writing a template.
 - `@ingroup` now works on functions as well as commands; `only_group` applies
@@ -219,7 +219,7 @@ First release as a standalone project, extracted from the
   reason.
 - A `CMAKE_FILE` argument may be a directory, which is searched for
   `CMakeLists.txt` and `*.cmake`, or a glob pattern. Both are expanded by
-  cmake2md, so shells that do not expand globs — Windows' — behave the same.
+  cmake2doc, so shells that do not expand globs — Windows' — behave the same.
 - `--list-templates` prints the packaged template names.
 - `--output -` writes to stdout.
 - `--check` verifies that generated documentation is up to date without

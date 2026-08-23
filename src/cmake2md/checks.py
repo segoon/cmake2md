@@ -2,7 +2,7 @@
 
 Documentation that merely restates the code drifts away from it; these checks
 are what turns the restatement into something the build can verify.  They stay
-silent about anything :mod:`cmake2md.signature` could not read, so a warning
+silent about anything :mod:`cmake2doc.signature` could not read, so a warning
 here always means a real disagreement.
 
 The same idea applies to an ``@example``: the sample is CMake, so it can be
@@ -93,7 +93,7 @@ def _ingroup_names_no_group(
     """Report an @ingroup naming a group that no @defgroup defines.
 
     Only checked once some group exists: a project that never writes
-    @defgroup is using @ingroup as a bare label, which is how cmake2md worked
+    @defgroup is using @ingroup as a bare label, which is how cmake2doc worked
     before groups had titles, and is nothing to complain about.
     """
     if groups and doc.group is not None and doc.group not in groups:

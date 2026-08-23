@@ -1,8 +1,8 @@
-"""Exception types raised by cmake2md."""
+"""Exception types raised by cmake2doc."""
 
 
 class Cmake2mdError(Exception):
-    """Base class for every error cmake2md reports to the user.
+    """Base class for every error cmake2doc reports to the user.
 
     Carries an optional human-readable location so the CLI can point at the
     offending file/symbol instead of dumping a traceback.

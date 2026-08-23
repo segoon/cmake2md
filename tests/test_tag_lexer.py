@@ -1,5 +1,5 @@
-from cmake2md import tag_lexer
-from cmake2md.tag_lexer import Tag
+from cmake2doc import tag_lexer
+from cmake2doc.tag_lexer import Tag
 
 
 def test_plain_text():

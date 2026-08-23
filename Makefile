@@ -63,12 +63,12 @@ toc: ## Regenerate the README table of contents
 
 .PHONY: toc-check
 toc-check: ## Verify the README table of contents is up to date
-	@cp README.md /tmp/cmake2md-README.md.orig
+	@cp README.md /tmp/cmake2doc-README.md.orig
 	@$(MAKE) toc >/dev/null
-	@if diff -q /tmp/cmake2md-README.md.orig README.md >/dev/null; then \
-		rm /tmp/cmake2md-README.md.orig; \
+	@if diff -q /tmp/cmake2doc-README.md.orig README.md >/dev/null; then \
+		rm /tmp/cmake2doc-README.md.orig; \
 	else \
-		mv /tmp/cmake2md-README.md.orig README.md; \
+		mv /tmp/cmake2doc-README.md.orig README.md; \
 		echo "README.md table of contents is out of date; run 'make toc'" >&2; \
 		exit 1; \
 	fi
@@ -84,13 +84,13 @@ example-check: $(addprefix example-check-,$(EXAMPLES)) ## Verify the example doc
 .PHONY: $(addprefix example-,$(EXAMPLES)) $(addprefix example-check-,$(EXAMPLES))
 
 $(addprefix example-,$(EXAMPLES)): example-%:
-	$(PYTHON) -m cmake2md \
+	$(PYTHON) -m cmake2doc \
 		--template $(TEMPLATE_$*) \
 		--output $(OUTPUT_$*) \
 		examples/$*/CMakeLists.txt
 
 $(addprefix example-check-,$(EXAMPLES)): example-check-%:
-	$(PYTHON) -m cmake2md --check \
+	$(PYTHON) -m cmake2doc --check \
 		--template $(TEMPLATE_$*) \
 		--output $(OUTPUT_$*) \
 		examples/$*/CMakeLists.txt

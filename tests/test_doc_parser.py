@@ -1,9 +1,9 @@
 import pytest
 
-from cmake2md import doc_parser
-from cmake2md import tag_lexer
-from cmake2md.doc_parser import ParamKind
-from cmake2md.errors import ParseError
+from cmake2doc import doc_parser
+from cmake2doc import tag_lexer
+from cmake2doc.doc_parser import ParamKind
+from cmake2doc.errors import ParseError
 
 
 def parse(*lines, strict=False):

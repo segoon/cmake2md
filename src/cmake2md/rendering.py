@@ -156,7 +156,7 @@ def resolve_template_spec(spec: str, cwd: pathlib.Path) -> TemplateSpec:
 
 
 def builtin_loader() -> jinja2.PackageLoader:
-    return jinja2.PackageLoader('cmake2md', 'templates')
+    return jinja2.PackageLoader('cmake2doc', 'templates')
 
 
 def build_environment(search_dirs: Sequence[pathlib.Path]) -> jinja2.Environment:

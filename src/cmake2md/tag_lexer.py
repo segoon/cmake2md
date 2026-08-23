@@ -2,7 +2,7 @@
 
 ``tokenize()`` turns a block of comment lines into a flat stream of literal
 text chunks and :class:`Tag` markers.  It knows nothing about which tags
-exist; that is :mod:`cmake2md.doc_parser`'s job.
+exist; that is :mod:`cmake2doc.doc_parser`'s job.
 """
 
 import dataclasses

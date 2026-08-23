@@ -1,7 +1,7 @@
 # A small project rendered with the built-in reStructuredText template.
 #
 # Render it with:
-#   cmake2md --template reference.rst.jinja \
+#   cmake2doc --template reference.rst.jinja \
 #            --output examples/rest/reference.rst \
 #            examples/rest/CMakeLists.txt
 
