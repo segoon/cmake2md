@@ -9,13 +9,13 @@ import dataclasses
 import sys
 from collections.abc import Mapping
 from collections.abc import Sequence
-from typing import Any
 from typing import NamedTuple
 
 import jinja2
 
 from . import checks
 from . import doc_parser
+from . import entries
 from . import parse
 from . import tag_lexer
 from .errors import ParseError
@@ -78,20 +78,14 @@ def check_and_report(
             reported.add(key)
 
 
-def enrich(
+def _attach_doc(
     item: parse.Documented,
     rules: DocRules,
-    groups: frozenset[str] = frozenset(),
-    reported: set[ReportKey] | None = None,
-    *,
-    check_now: bool = True,
-) -> dict[str, Any]:
-    """Attach the parsed doc comment to `item`.
-
-    `pretty` starts out as the plain description; `render_symbols` overwrites
-    it for a `Symbol`, once every symbol has been enriched. A command call has
-    no signature of its own for the function template to render, so its
-    description is all `pretty` will ever be.
+    groups: frozenset[str],
+    reported: set[ReportKey] | None,
+    check_now: bool,
+) -> doc_parser.DocComment:
+    """Parse `item`'s comment, and check/report it unless told not to yet.
 
     `check_now=False` defers `check_and_report` to the caller: a standalone
     comment block is enriched before any `@defgroup` in the sources is known,
@@ -110,17 +104,79 @@ def enrich(
 
     if check_now:
         check_and_report(item, doc, groups, rules, reported)
+    return doc
 
-    res = dataclasses.asdict(item)
-    res['doc'] = doc
-    res['group'] = doc.group
-    res['location'] = item.location
-    res['pretty'] = doc.description
-    return res
+
+def enrich_symbol(
+    item: parse.Symbol,
+    rules: DocRules,
+    groups: frozenset[str] = frozenset(),
+    reported: set[ReportKey] | None = None,
+    *,
+    check_now: bool = True,
+) -> entries.EnrichedSymbol:
+    """Attach the parsed doc comment to `item`.
+
+    `pretty` starts out as the plain description; `render_symbols` overwrites
+    it once every symbol has been enriched.
+    """
+    doc = _attach_doc(item, rules, groups, reported, check_now)
+    return entries.EnrichedSymbol(
+        **vars(item), doc=doc, group=doc.group, pretty=doc.description
+    )
+
+
+def enrich_command(
+    item: parse.Command,
+    rules: DocRules,
+    groups: frozenset[str] = frozenset(),
+    reported: set[ReportKey] | None = None,
+    *,
+    check_now: bool = True,
+) -> entries.EnrichedCommand:
+    """Attach the parsed doc comment to `item`.
+
+    A command call has no signature of its own for the function template to
+    render, so its description is all `pretty` will ever be.
+    """
+    doc = _attach_doc(item, rules, groups, reported, check_now)
+    return entries.EnrichedCommand(
+        **vars(item), doc=doc, group=doc.group, pretty=doc.description
+    )
+
+
+def enrich_variable(
+    item: parse.Variable,
+    rules: DocRules,
+    groups: frozenset[str] = frozenset(),
+    reported: set[ReportKey] | None = None,
+    *,
+    check_now: bool = True,
+) -> entries.EnrichedVariable:
+    """Attach the parsed doc comment to `item`."""
+    doc = _attach_doc(item, rules, groups, reported, check_now)
+    return entries.EnrichedVariable(
+        **vars(item), doc=doc, group=doc.group, pretty=doc.description
+    )
+
+
+def enrich_block(
+    item: parse.Block,
+    rules: DocRules,
+    groups: frozenset[str] = frozenset(),
+    reported: set[ReportKey] | None = None,
+    *,
+    check_now: bool = True,
+) -> entries.EnrichedBlock:
+    """Attach the parsed doc comment to `item`."""
+    doc = _attach_doc(item, rules, groups, reported, check_now)
+    return entries.EnrichedBlock(
+        **vars(item), doc=doc, group=doc.group, pretty=doc.description
+    )
 
 
 def render_symbols(
-    symbols: Sequence[dict[str, Any]], function_template: jinja2.Template
+    symbols: Sequence[entries.EnrichedSymbol], function_template: jinja2.Template
 ) -> None:
     """Fill in `pretty` for every enriched symbol, in place.
 
@@ -129,12 +185,12 @@ def render_symbols(
     naming another symbol in the same run instead of always missing.
     """
     for symbol in symbols:
-        symbol['pretty'] = function_template.render(
+        symbol.pretty = function_template.render(
             {'symbol': symbol, 'symbols': symbols}
         ).strip()
 
 
-def report_undocumented(symbols: Sequence[dict[str, Any]]) -> bool:
+def report_undocumented(symbols: Sequence[entries.EnrichedSymbol]) -> bool:
     """Report every public symbol that carries no doc comment.
 
     A leading underscore is CMake's way of saying a function is private, and
@@ -142,16 +198,16 @@ def report_undocumented(symbols: Sequence[dict[str, Any]]) -> bool:
     """
     ok = True
     for symbol in symbols:
-        if symbol['name'].startswith('_') or symbol['doc'].internal:
+        if symbol.name.startswith('_') or symbol.doc.internal:
             continue
-        if any(line.strip() for line in symbol['comments']):
+        if any(line.strip() for line in symbol.comments):
             continue
-        print(f'{symbol["location"]}: error: undocumented', file=sys.stderr)
+        print(f'{symbol.location}: error: undocumented', file=sys.stderr)
         ok = False
     return ok
 
 
-def collect_groups(blocks: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def collect_groups(blocks: Sequence[entries.EnrichedBlock]) -> list[entries.Group]:
     """Build the group list out of the @defgroup tags in `blocks`.
 
     The order is the order they were written in, which is the only ordering
@@ -163,25 +219,25 @@ def collect_groups(blocks: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     groups = []
     first_seen: dict[str, str] = {}
     for block in blocks:
-        doc = block['doc']
+        doc = block.doc
         for section in doc.of_kind(doc_parser.DEFGROUP):
-            earlier = first_seen.setdefault(section.name, block['location'])
-            if earlier != block['location']:
+            earlier = first_seen.setdefault(section.name, block.location)
+            if earlier != block.location:
                 print(
-                    f'{block["location"]}: warning: @defgroup {section.name} '
+                    f'{block.location}: warning: @defgroup {section.name} '
                     f'is already defined at {earlier}',
                     file=sys.stderr,
                 )
                 continue
             groups.append(
-                {
-                    'name': section.name,
+                entries.Group(
+                    name=section.name,
                     # A group with no title reads by its own name.
-                    'title': section.text or section.name,
-                    'description': doc.description,
-                    'doc': doc,
-                    'location': block['location'],
-                }
+                    title=section.text or section.name,
+                    description=doc.description,
+                    doc=doc,
+                    location=block.location,
+                )
             )
     return groups
 

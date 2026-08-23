@@ -11,6 +11,7 @@ import jinja2
 from . import __version__
 from . import config
 from . import doc_parser
+from . import entries
 from . import output
 from . import parse
 from . import pipeline
@@ -317,31 +318,36 @@ def run(raw_args: argparse.Namespace, cwd: pathlib.Path) -> int:
     # against, including an @ingroup inside a standalone block itself, so
     # checking those blocks is deferred until every one has been read.
     documented_blocks = [
-        pipeline.enrich(b, rules, reported=reported, check_now=False) for b in blocks
+        pipeline.enrich_block(b, rules, reported=reported, check_now=False)
+        for b in blocks
     ]
     groups = pipeline.collect_groups(documented_blocks)
-    known = frozenset(group['name'] for group in groups)
+    known = frozenset(group.name for group in groups)
     for block, doc_block in zip(blocks, documented_blocks, strict=True):
-        pipeline.check_and_report(block, doc_block['doc'], known, rules, reported)
+        pipeline.check_and_report(block, doc_block.doc, known, rules, reported)
 
-    enriched_symbols = [pipeline.enrich(s, rules, known, reported) for s in symbols]
+    enriched_symbols = [
+        pipeline.enrich_symbol(s, rules, known, reported) for s in symbols
+    ]
     # Every symbol is enriched before any of them is rendered, so @see can
     # resolve a name against the whole list rather than always missing.
     pipeline.render_symbols(enriched_symbols, function_template)
 
-    context = {
-        'symbols': enriched_symbols,
+    context = entries.Context(
+        symbols=enriched_symbols,
         # Variables first, so a warning about an option()/set(... CACHE ...)
         # is reported under its own name rather than the generic 'command'.
-        'variables': [pipeline.enrich(v, rules, known, reported) for v in variables],
-        'commands': [pipeline.enrich(c, rules, known, reported) for c in commands],
-        'groups': groups,
-        'files': [b for b in documented_blocks if b['doc'].documents_file],
-    }
+        variables=[
+            pipeline.enrich_variable(v, rules, known, reported) for v in variables
+        ],
+        commands=[pipeline.enrich_command(c, rules, known, reported) for c in commands],
+        groups=groups,
+        files=[b for b in documented_blocks if b.doc.documents_file],
+    )
 
     ok = True
     if args.require_docs:
-        ok &= pipeline.report_undocumented(context['symbols'])
+        ok &= pipeline.report_undocumented(context.symbols)
     if args.json:
         content = serialize.dump(context)
         if args.json == STDOUT:

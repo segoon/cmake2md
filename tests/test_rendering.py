@@ -1,7 +1,35 @@
 import pytest
 
+from cmake2md import doc_parser
+from cmake2md import entries
 from cmake2md import rendering
+from cmake2md import tag_lexer
 from cmake2md.errors import UsageError
+
+
+def item(
+    name: str = '',
+    group: str | None = None,
+    comments: list[str] | None = None,
+    doc: doc_parser.DocComment | None = None,
+    pretty: str = '',
+) -> entries.EnrichedBlock:
+    """An `entries.Item` with only the fields these tests care about set.
+
+    `EnrichedBlock` because it is the one `Enriched*` with no kind-specific
+    fields beyond the ones every entry shares — the lightest real entry the
+    filters under test could see.
+    """
+    return entries.EnrichedBlock(
+        name=name,
+        comments=comments or [],
+        comments_line=0,
+        filepath='',
+        line=0,
+        doc=doc if doc is not None else doc_parser.parse([]),
+        group=group,
+        pretty=pretty,
+    )
 
 
 def test_unquote():
@@ -31,10 +59,10 @@ def test_oneline_joins_continuations():
 
 
 def test_only_command_and_only_group():
-    items: list[rendering.Item] = [
-        {'name': 'option', 'group': 'build'},
-        {'name': 'option', 'group': None},
-        {'name': 'set', 'group': 'build'},
+    items = [
+        item(name='option', group='build'),
+        item(name='option', group=None),
+        item(name='set', group='build'),
     ]
     assert rendering.only_command(items, 'option') == items[:2]
     assert rendering.only_group(items, 'build') == [items[0], items[2]]
@@ -42,32 +70,29 @@ def test_only_command_and_only_group():
 
 
 def test_only_group_tolerates_items_without_a_group():
-    assert rendering.only_group([{'name': 'x'}], None) == [{'name': 'x'}]
+    assert rendering.only_group([item(name='x')], None) == [item(name='x')]
 
 
 def test_documented_keeps_only_commented_items():
-    items: list[rendering.Item] = [
-        {'name': 'a', 'comments': [' doc']},
-        {'name': 'b', 'comments': []},
-        {'name': 'c', 'comments': ['', '  ']},
+    items = [
+        item(name='a', comments=[' doc']),
+        item(name='b', comments=[]),
+        item(name='c', comments=['', '  ']),
     ]
     assert rendering.documented(items) == [items[0]]
 
 
 def test_public_drops_internal_entries():
-    from cmake2md import doc_parser
-    from cmake2md import tag_lexer
-
     def doc(*lines):
         return doc_parser.parse(tag_lexer.tokenize(list(lines)))
 
-    items: list[rendering.Item] = [
-        {'name': 'a', 'doc': doc(' public')},
-        {'name': 'b', 'doc': doc(' private', ' @internal')},
-        {'name': 'c'},
+    items = [
+        item(name='a', doc=doc(' public')),
+        item(name='b', doc=doc(' private', ' @internal')),
+        item(name='c'),
     ]
-    # An entry with no parsed comment at all is left in: only an explicit
-    # @internal takes something out.
+    # An entry with no @internal tag is left in; only an explicit @internal
+    # takes something out.
     assert rendering.public(items) == [items[0], items[2]]
 
 
@@ -132,7 +157,7 @@ def test_anchor_follows_the_markdown_heading_rule():
 
 
 def test_symbol_link_only_links_what_the_document_defines():
-    symbols: list[rendering.Item] = [{'name': 'example_add_library'}]
+    symbols = [item(name='example_add_library')]
     assert (
         rendering.symbol_link('example_add_library', symbols)
         == '[example_add_library](#example_add_library)'

@@ -4,11 +4,11 @@ import pathlib
 import re
 from collections.abc import Iterable
 from collections.abc import Sequence
-from typing import Any
 from typing import NamedTuple
 
 import jinja2
 
+from . import entries
 from .errors import UsageError
 
 #: Markers that delimit the generated part of a file written with --inject.
@@ -27,8 +27,8 @@ FENCE_RE = re.compile(
 )
 
 #: One entry of the `symbols` or `commands` list a template is rendered with,
-#: as built by `cli.enrich`.
-Item = dict[str, Any]
+#: as built by `pipeline.enrich_symbol` and friends.
+Item = entries.Item
 
 
 def unquote(s: str) -> str:
@@ -57,7 +57,7 @@ def oneline(s: str) -> str:
 
 
 def render(collection: Iterable[Item]) -> str:
-    return ''.join(item['pretty'] + '\n' for item in collection)
+    return ''.join(item.pretty + '\n' for item in collection)
 
 
 def anchor(name: str) -> str:
@@ -76,31 +76,27 @@ def symbol_link(name: str, collection: Iterable[Item]) -> str:
     a cross-reference to another project's function is still worth printing.
     """
     target = name.strip().removesuffix('()')
-    if any(item['name'] == target for item in collection):
+    if any(item.name == target for item in collection):
         return f'[{target}](#{anchor(target)})'
     return name
 
 
 def only_command(collection: Iterable[Item], name: str) -> list[Item]:
-    return [item for item in collection if item['name'] == name]
+    return [item for item in collection if item.name == name]
 
 
 def only_group(collection: Iterable[Item], name: str | None) -> list[Item]:
-    return [item for item in collection if item.get('group') == name]
+    return [item for item in collection if item.group == name]
 
 
 def documented(collection: Iterable[Item]) -> list[Item]:
     """Keep only the entries that carry a doc comment."""
-    return [item for item in collection if any(c.strip() for c in item['comments'])]
+    return [item for item in collection if any(c.strip() for c in item.comments)]
 
 
 def public(collection: Iterable[Item]) -> list[Item]:
     """Drop the entries their author marked @internal."""
-    return [
-        item
-        for item in collection
-        if not (item.get('doc') is not None and item['doc'].internal)
-    ]
+    return [item for item in collection if not item.doc.internal]
 
 
 FILTERS = {
@@ -197,10 +193,17 @@ def load_template(
         ) from None
 
 
-def render_document(template: jinja2.Template, context: dict[str, Any]) -> str:
+def render_document(template: jinja2.Template, context: entries.Context) -> str:
+    rendered = template.render(
+        symbols=context.symbols,
+        variables=context.variables,
+        commands=context.commands,
+        groups=context.groups,
+        files=context.files,
+    )
     # Whatever whitespace the template's control blocks leave at either end,
     # a document ends with exactly one newline and no leading blank lines.
-    return collapse_blank_lines(template.render(context)).strip() + '\n'
+    return collapse_blank_lines(rendered).strip() + '\n'
 
 
 def inject(existing: str, content: str, path: str) -> str:
