@@ -6,6 +6,7 @@ and uses jinja templates to generate final documentation.
 
 # Core documentation
 
+- @VISION.md - the core product vision, read it first.
 - @README.md - the main user documentation.
 - @TODO.md - the plans.
 

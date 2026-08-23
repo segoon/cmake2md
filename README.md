@@ -10,13 +10,24 @@ own [Jinja](https://jinja.palletsprojects.com/) templates.
 Nothing about the output format is baked in: cmake2md hands your template a
 parsed model of the file and gets out of the way.
 
+## System requirements
+
+The only system requirement is Python 3.10 or newer.
+
+The supported OSes are the following:
+- Linux
+- MacOS
+- Windows
+
+Ubuntu 22.04 or newer official repository already has the python of the required version.
+
 ## Installation
 
 ```shell
-pip install cmake2md      # or: pipx install cmake2md
+pipx install cmake2md
+# Or:
+pip install cmake2md
 ```
-
-Requires Python 3.10 or newer.
 
 ## Quick start
 
