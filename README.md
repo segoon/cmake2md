@@ -45,8 +45,8 @@ parsed model of the file and gets out of the way.
 
 * Doxygen-like `@`-tags for arguments, options, params and more, extracted
   from comments above `function()`, `macro()` and command calls.
-* Output driven entirely by your own Jinja templates, with two built-in ones
-  to start from.
+* Output driven entirely by your own Jinja templates, with three built-in ones
+  to start from — Markdown or reStructuredText for Sphinx, out of the box.
 * A checking pass that compares the doc comment against what the CMake code
   actually accepts — and against `@example` blocks, which are parsed as
   CMake — catching drift a plain doc generator can't.
@@ -126,7 +126,9 @@ example_add_library(
 ````
 
 A complete, runnable example lives in
-[`examples/`](https://github.com/segoon/cmake2md/tree/master/examples).
+[`examples/`](https://github.com/segoon/cmake2md/tree/master/examples) — one
+per output flavour: Markdown, reStructuredText, and reStructuredText using
+Sphinx's CMake domain.
 
 ### Comment syntax
 
@@ -503,7 +505,7 @@ to configure, so it is not in the list; it is still in `commands`. A
 
 #### The built-in templates
 
-Two templates ship with cmake2md, and `--list-templates` names them.
+Three templates ship with cmake2md, and `--list-templates` names them.
 
 `reference.md.jinja` is a whole document: a table of contents, every
 documented function and macro laid out by `@defgroup`, and a table of the
@@ -514,10 +516,26 @@ needs only:
 cmake2md --template reference.md.jinja --output docs/reference.md .
 ```
 
+`reference.rst.jinja` is the same document in reStructuredText, for a project
+whose documentation is built with Sphinx. It uses only directives docutils
+itself understands — `code`, `note`, `warning`, `admonition`, `list-table` —
+so the output parses with or without Sphinx, and `.. contents::` leaves the
+table of contents to the renderer. For Sphinx's CMake domain
+(`.. cmake:command::`, and the cross-references that come with it) see
+[`examples/sphinx/`](https://github.com/segoon/cmake2md/tree/master/examples/sphinx),
+which is a template rather than a built-in because the domain is an extension
+a site either installs or does not.
+
 `function.md.jinja` renders a single symbol, and is what fills
 `symbol.pretty`; put a file of that name in a `--template-dir` (or the working
 directory) to change how every symbol is rendered. It also works as a whole
 document, listing every documented symbol and nothing else.
+
+**`symbol.pretty` is Markdown, in every run**: `function.md.jinja` is what
+fills it, and the name of that template is not configurable. A template that
+emits anything else — the built-in reStructuredText one included — has to lay
+symbols out from `doc.args`, `doc.params` and the rest itself. Read
+`reference.rst.jinja` for how.
 
 ### Tags of your own
 
@@ -575,7 +593,7 @@ gap between two neighbourhoods rather than new ground:
 | | |
 |---|---|
 | [Doxygen](https://www.doxygen.nl/) | Where the `@tag` vocabulary comes from, down to a paragraph tag ending at a blank line. It has no CMake parser. |
-| [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2md does, and emits reStructuredText for Sphinx rather than Markdown. |
+| [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2md does, and targets a Sphinx site: reStructuredText is what it emits, and the docstrings are written in it. cmake2md renders through templates, so it emits either — but a project already built with Sphinx will find CMinx the closer fit. |
 | CMake's own [Sphinx domain](https://github.com/Kitware/CMake/blob/master/Help/dev/documentation.rst) | Where the `#[==[.rst:` comment style comes from, and how CMake's own modules are documented. |
 | [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
 | [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |

@@ -1,0 +1,208 @@
+{#
+  A whole reStructuredText document: the same shape as reference.md.jinja,
+  in the format Sphinx reads.
+
+  Symbols are rendered here rather than through `symbol.pretty`: that field is
+  filled by function.md.jinja and so is Markdown in every run.  A template of
+  your own that emits anything but Markdown has to lay symbols out itself, as
+  this one does.
+
+  Only directives docutils itself understands are used -- `code`, `note`,
+  `warning`, `admonition`, `list-table` -- so the output parses with or
+  without Sphinx.  See examples/sphinx/ for a template that emits the CMake
+  domain directives instead.
+#}
+{% macro heading(text, char) -%}
+{{ text }}
+{{ char * text | length }}
+{%- endmacro %}
+
+{% macro required(r) %}
+{%- if not r %}[{% endif %}
+{{- caller() }}
+{%- if not r %}]{% endif %}
+{%- endmacro %}
+
+{% macro about(arg) %}
+{%- if arg.type_ or arg.default %} ({% if arg.type_ %}{{ arg.type_ }}
+{%- endif %}{% if arg.type_ and arg.default %}, {% endif %}
+{%- if arg.default %}default ``{{ arg.default }}``{% endif %}){% endif %}
+{%- endmacro %}
+
+{#
+  A field list entry.  Its body is indented so that a description running to
+  several lines stays part of the field rather than ending the list.
+#}
+{% macro field(label, name, arg) -%}
+:{{ label }} {{ name }}:{{ about(arg) }} {{ arg.description | trim | indent(3) }}
+{%- endmacro %}
+
+{% macro fields(doc) %}
+{%- for arg in doc.args %}
+{{ field('param', arg.name, arg) }}
+{%- endfor %}
+{%- for arg in doc.options %}
+{{ field('option', arg.name, arg) }}
+{%- endfor %}
+{%- for arg in doc.params %}
+{{ field('param', arg.name ~ ' <value>', arg) }}
+{%- endfor %}
+{%- for arg in doc.multi_params %}
+{{ field('param', arg.name ~ ' <value>...', arg) }}
+{%- endfor %}
+{%- for arg in doc.returns %}
+{{ field('sets', arg.name, arg) }}
+{%- endfor %}
+{%- for section in doc.of_kind('since') %}
+:since: {{ section.text | trim | indent(3) }}
+{%- endfor %}
+{%- if doc.of_kind('see') %}
+:see also: {{ doc.of_kind('see') | map(attribute='text') | map('trim')
+              | join(', ') }}
+{%- endif %}
+{%- endmacro %}
+
+{#
+  @note and @warning are directives of their own; anything else -- @todo, or a
+  tag the project declared itself -- becomes a generic admonition titled with
+  whatever label the tag carries.
+#}
+{% macro admonition(section) -%}
+{% if section.kind in ['note', 'warning'] %}.. {{ section.kind }}::
+{% else %}.. admonition:: {{ section.label | trim | trim(':') }}
+{% endif %}
+   {{ section.text | trim | indent(3) }}
+{%- endmacro %}
+
+{#
+  Kinds rendered some other way above, so they must not appear a second time
+  as an admonition: @example as a literal block, @since and @see as fields,
+  @defgroup as a group of its own rather than a symbol's section.
+#}
+{% set rendered_kinds = ['example', 'since', 'see', 'defgroup'] %}
+
+{% macro synopsis(symbol) -%}
+.. code:: cmake
+
+   {{ symbol.name }}(
+{%- for arg in symbol.doc.args %}
+       <{{ arg.name }}>
+{%- endfor %}
+{%- for arg in symbol.doc.options %}
+       {% call required(arg.required) %}{{ arg.name }}{% endcall %}
+{%- endfor %}
+{%- for arg in symbol.doc.params %}
+       {% call required(arg.required) %}{{ arg.name }} <value>{% endcall %}
+{%- endfor %}
+{%- for arg in symbol.doc.multi_params %}
+       {% call required(arg.required) %}{{ arg.name }} <value>...{% endcall %}
+{%- endfor %}
+   )
+{%- endmacro %}
+
+{% macro symbol_doc(symbol) -%}
+{{ heading(symbol.name, '~') }}
+{% if symbol.doc.deprecated %}
+.. warning::
+
+   Deprecated.
+{% endif %}
+{%- if symbol.doc.brief %}
+{{ symbol.doc.brief }}
+{% endif %}
+{{ symbol.doc.description }}
+
+{{ synopsis(symbol) }}
+
+{{ fields(symbol.doc) | trim }}
+{%- for example in symbol.doc.of_kind('example') %}
+
+.. code:: cmake
+
+   {{ example.text | trim | indent(3) }}
+{%- endfor %}
+{%- for section in symbol.doc.sections if section.kind not in rendered_kinds %}
+
+{{ admonition(section) }}
+{%- endfor %}
+{%- endmacro %}
+
+{#
+  A list-table rather than a simple table: a description or a default may
+  contain any character at all, including the `|` that would end a cell.
+#}
+{% macro table(variables, title) -%}
+.. list-table:: {{ title }}
+   :header-rows: 1
+   :widths: 25 55 20
+
+   * - Option
+     - Description
+     - Default
+{%- for variable in variables %}
+   * - ``{{ variable.name }}``
+     - {{ variable.docstring | unquote | oneline | trim | indent(7) }}
+       {%- if variable.choices %} (one of: {{ variable.choices | join(', ') }}){% endif %}
+     - ``{{ variable.default | escape }}``
+{%- endfor %}
+{%- endmacro %}
+
+{#
+  The same five sets reference.md.jinja works from: what is worth showing, the
+  groups that actually hold some of it, and whatever is in no group at all.
+  A group name with no @defgroup behind it must not make a symbol disappear.
+#}
+{%- set shown = symbols | documented | public %}
+{%- set entries = variables | documented %}
+{%- set symbol_groups = groups | selectattr('name', 'in',
+        shown | map(attribute='group') | list) | list %}
+{%- set option_groups = groups | selectattr('name', 'in',
+        entries | map(attribute='group') | list) | list %}
+{%- set loose_symbols = shown | rejectattr('group', 'in',
+        symbol_groups | map(attribute='name') | list) | list %}
+{%- set loose_entries = entries | rejectattr('group', 'in',
+        option_groups | map(attribute='name') | list) | list %}
+{%- for file in files %}
+{{ heading(file.doc.brief or 'Reference', '=') }}
+
+{{ file.doc.description }}
+{% else %}
+{{ heading('Reference', '=') }}
+{% endfor %}
+
+.. contents::
+   :local:
+{% for group in symbol_groups %}
+{{ heading(group.title, '-') }}
+
+{{ group.description }}
+{% for symbol in shown | only_group(group.name) %}
+{{ symbol_doc(symbol) }}
+{% endfor %}
+{%- endfor %}
+{#
+  Unlike the Markdown template, this heading is not skipped when there are no
+  groups: a `~` symbol heading directly under the `=` title, with a `-`
+  section elsewhere in the file, is an inconsistent hierarchy in rST.
+#}
+{%- if loose_symbols %}
+{{ heading('Functions and macros', '-') }}
+{% for symbol in loose_symbols %}
+{{ symbol_doc(symbol) }}
+{% endfor %}
+{%- endif %}
+{%- if entries %}
+{{ heading('Build options', '-') }}
+{% for group in option_groups %}
+{{ heading(group.title, '~') }}
+
+{{ group.description }}
+
+{{ table(entries | only_group(group.name), group.title) }}
+{% endfor %}
+{%- if loose_entries %}
+{% if option_groups %}{{ heading('Other', '~') }}{% endif %}
+
+{{ table(loose_entries, 'Options') }}
+{%- endif %}
+{%- endif %}

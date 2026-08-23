@@ -1,32 +1,17 @@
-# Example
+# Examples
 
-[`CMakeLists.txt`](CMakeLists.txt) is a small documented CMake project;
-[`reference.md.jinja`](reference.md.jinja) is a generic template that turns it
-into [`reference.md`](reference.md), a Markdown reference with function and
-macro sections and grouped option tables.
+One directory per output flavour. Each is a project of its own — its own
+`CMakeLists.txt`, its own generated output — so a directory can be copied out
+whole and used as a starting point.
 
-From the repository root:
+| Directory | Shows | Template |
+|-----------|-------|----------|
+| [`md/`](md) | Markdown, with grouped option tables | its own `reference.md.jinja` |
+| [`rest/`](rest) | reStructuredText that plain docutils parses | the built-in `reference.rst.jinja` |
+| [`sphinx/`](sphinx) | reStructuredText using Sphinx's CMake domain | its own `reference.rst.jinja` |
 
-```shell
-cmake2md \
-    --template examples/reference.md.jinja \
-    --output examples/reference.md \
-    examples/CMakeLists.txt
-```
+Regenerate all three from the repository root with `make example`, or check
+that they are up to date with `make example-check`.
 
-Things worth looking at in the template:
-
-- `symbol.pretty` renders a function or macro with the built-in
-  `function.md.jinja`.
-- `symbols | documented` drops `_example_internal_helper`, which has no doc
-  comment of its own, and `symbol.type_` splits functions from macros.
-- `commands | only_command('option') | only_group('build')` selects the
-  `option()` calls tagged `# @ingroup build`.
-- `only_group(None)` collects the options that carry no `@ingroup` tag.
-- `md_escape` keeps descriptions from breaking the Markdown tables, and
-  `escape` quotes defaults such as `${CMAKE_SOURCE_DIR}`.
-
-The CMake source also exercises a few parsing details on purpose: a description
-containing `maintainer@example.com` (not a tag), an escaped `@@` sign, an
-`@@ingroup` mentioned in prose rather than used as a tag, and a comment block
-ended by a blank line.
+`md/` is the fullest of the three: it exercises the parsing corners on
+purpose, and its README lists them.

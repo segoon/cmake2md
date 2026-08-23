@@ -55,7 +55,7 @@ jobs:
           /tmp/smoke/bin/cmake2md \
             --template function.md.jinja \
             --output /tmp/smoke/out.md \
-            examples/CMakeLists.txt
+            examples/md/CMakeLists.txt
           grep -q example_add_library /tmp/smoke/out.md
 
   ci-ok:

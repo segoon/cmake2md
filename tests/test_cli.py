@@ -553,20 +553,19 @@ def test_non_utf8_source_is_reported_without_a_traceback(template, tmp_path, cap
     assert 'not valid UTF-8' in capsys.readouterr().err
 
 
+EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / 'examples'
+
+
+def render_example(name, template, out):
+    """Render examples/<name>/CMakeLists.txt, as `make example-<name>` does."""
+    assert run('-t', template, '-o', out, EXAMPLES / name / 'CMakeLists.txt') == 0
+    return out.read_text(encoding='utf-8')
+
+
 def test_example_renders(tmp_path):
-    root = pathlib.Path(__file__).resolve().parent.parent
-    out = tmp_path / 'reference.md'
-    assert (
-        run(
-            '-t',
-            root / 'examples' / 'reference.md.jinja',
-            '-o',
-            out,
-            root / 'examples' / 'CMakeLists.txt',
-        )
-        == 0
+    text = render_example(
+        'md', EXAMPLES / 'md' / 'reference.md.jinja', tmp_path / 'reference.md'
     )
-    text = out.read_text(encoding='utf-8')
     assert '## example_add_library' in text
     assert '## example_fail' in text
     assert 'maintainer@example.com' in text
@@ -577,6 +576,27 @@ def test_example_renders(tmp_path):
     # from the ungrouped table.
     assert '`EXAMPLE_STATIC`' in text
     assert '_example_internal_helper' not in text
+
+
+def test_rest_example_renders_with_the_builtin_template(tmp_path):
+    text = render_example('rest', 'reference.rst.jinja', tmp_path / 'reference.rst')
+    assert 'example_add_library\n~~~' in text
+    assert '.. code:: cmake' in text
+    assert ':param NAME: the name of the resulting target' in text
+    assert '.. list-table::' in text
+    assert '``EXAMPLE_BUILD_TESTS``' in text
+
+
+def test_sphinx_example_renders_domain_directives(tmp_path):
+    text = render_example(
+        'sphinx',
+        EXAMPLES / 'sphinx' / 'reference.rst.jinja',
+        tmp_path / 'reference.rst',
+    )
+    assert '.. cmake:command:: example_add_library(' in text
+    assert '.. cmake:variable:: EXAMPLE_BUILD_TESTS' in text
+    assert '.. versionadded:: 0.2' in text
+    assert '.. deprecated::' in text
 
 
 FILE_DOC_SOURCE = """\
@@ -879,6 +899,44 @@ def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_pa
     assert 'undocumented_function' not in text
 
 
+def test_builtin_rst_template_documents_a_whole_project(cmake_file, tmp_path):
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert 'Reference\n=========' in text
+    assert 'example_add_library\n~~~~~~~~~~~~~~~~~~~' in text
+    assert ':param OUTPUT_NAME <value>: the artifact name' in text
+    assert '``EXAMPLE_BUILD_TESTS``' in text
+    assert 'undocumented_function' not in text
+
+
+def test_the_rst_template_emits_no_markdown(cmake_file, tmp_path):
+    """`symbol.pretty` is Markdown, so the rST template must not reach for it."""
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert '```' not in text
+    assert '**' not in text
+    assert '## ' not in text
+
+
+def test_the_rst_output_parses_as_rst(cmake_file, tmp_path):
+    """Skipped where docutils is absent: it is nobody's declared dependency."""
+    docutils = pytest.importorskip('docutils.core')
+    out = tmp_path / 'ref.rst'
+    assert run('-t', 'reference.rst.jinja', '-o', out, cmake_file) == 0
+
+    # halt_level=2: a warning about the document is a malformed document here,
+    # and raises rather than being written to stderr.
+    docutils.publish_string(
+        out.read_text(encoding='utf-8'),
+        writer='null',
+        settings_overrides={'halt_level': 2, 'report_level': 5},
+    )
+
+
 def test_reference_template_lays_itself_out_by_group(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(
@@ -908,11 +966,12 @@ def test_reference_template_lays_itself_out_by_group(tmp_path):
     assert '## loose_one' in text
 
 
-def test_list_templates_names_both_builtins(capsys):
+def test_list_templates_names_every_builtin(capsys):
     assert run('--list-templates') == 0
     out = capsys.readouterr().out
     assert 'function.md.jinja' in out
     assert 'reference.md.jinja' in out
+    assert 'reference.rst.jinja' in out
 
 
 CONFIG = """\

@@ -6,7 +6,8 @@ make check      # lint, type check and test, as CI does
 ```
 
 `make help` lists the rest: `test`, `lint`, `format`, `typecheck`, `example`
-(regenerate `examples/reference.md`), `toc` (regenerate the README's table of
+(regenerate all three examples; `example-md`, `example-rest` and
+`example-sphinx` do one each), `toc` (regenerate the README's table of
 contents via [doctoc](https://github.com/thlorenz/doctoc), through `npx`),
 `dist`, `clean` and, for maintainers, `release-check`, `publish-test` and
 `publish`.
