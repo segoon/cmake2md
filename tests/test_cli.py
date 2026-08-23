@@ -673,6 +673,17 @@ def test_json_dump_carries_the_model_and_a_schema_version(cmake_file, tmp_path):
     ]
 
 
+def test_json_alone_needs_no_template(cmake_file, tmp_path):
+    # A consumer that only wants the parsed model has no use for a template;
+    # requiring one anyway forces a throwaway --template/--output pair.
+    import json
+
+    out = tmp_path / 'model.json'
+    assert run('--json', out, cmake_file) == 0
+    names = [s['name'] for s in json.loads(out.read_text(encoding='utf-8'))['symbols']]
+    assert 'example_add_library' in names
+
+
 def test_json_to_stdout_is_rejected_with_check(cmake_file, template, tmp_path, capsys):
     assert (
         run(

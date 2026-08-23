@@ -12,12 +12,7 @@ Found by review, each reproduced through the CLI against a green test suite;
 in the order they are worth fixing, worst first. Every one of them needs a
 regression test, since the suite passes today.
 
-1. **`--json` on its own is refused.** `validate_args` demands a
-   `--template`, so a consumer that wants only the model has to invent a
-   throwaway template and output. Require a template only when nothing else
-   was asked for.
-
-2. **A symbol documented without parameters is never checked.** The gate in
+1. **A symbol documented without parameters is never checked.** The gate in
    `checks.check` is `doc.all_params()`, so a function whose comment is one
    `@brief` and whose body is a full `cmake_parse_arguments()` is compared
    against nothing; document a single parameter and the same function
@@ -59,7 +54,7 @@ regression test, since the suite passes today.
 * The README says a `@defgroup` title is "the rest of the line". It is a
   paragraph: a title written over two lines is all title.
 * The README says checking is skipped for "symbols with no doc comment at
-  all". The gate is a symbol with no *parameter* documented — see bug 2.
+  all". The gate is a symbol with no *parameter* documented — see bug 1.
 * The template-key table lists `type_` twice, once for symbols and once for
   variables, which reads as a contradiction.
 * Neither the README nor `--help` says that a registered tag with nothing at

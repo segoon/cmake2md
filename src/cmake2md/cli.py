@@ -231,7 +231,9 @@ def validate_args(
         source = f'and no {config.DEFAULT_FILE} found'
     else:
         source = f'by {config_path} or the command line'
-    if not args.template:
+    # --json alone is a legitimate run: a consumer that wants the parsed
+    # model has no use for a template at all.
+    if not args.template and not args.json:
         raise UsageError(f'no --template given {source}, nothing to render')
     if not args.path:
         raise UsageError(f'no CMAKE_FILE given {source}, nothing to read')

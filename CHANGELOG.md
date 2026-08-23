@@ -36,6 +36,9 @@
   `--no-inject` and `--no-require-docs`, like `--strict` already accepted
   `--no-strict`, so a project that records one of them as `true` in
   `cmake2md.toml` can still turn it off for one run.
+- `--json` no longer needs a `--template`/`--output` pair alongside it; a
+  consumer that wants only the parsed model no longer has to invent a
+  throwaway one.
 
 ### Added
 
