@@ -10,7 +10,9 @@ own [Jinja](https://jinja.palletsprojects.com/) templates.
 Nothing about the output format is baked in: cmake2md hands your template a
 parsed model of the file and gets out of the way.
 
-## System requirements
+## Getting started
+
+### System requirements
 
 The only system requirement is Python 3.10 or newer.
 
@@ -21,7 +23,7 @@ The supported OSes are the following:
 
 Ubuntu 22.04 or newer official repository already has the python of the required version.
 
-## Installation
+### Installation
 
 ```shell
 pipx install cmake2md
@@ -29,7 +31,7 @@ pipx install cmake2md
 pip install cmake2md
 ```
 
-## Quick start
+### Quick start
 
 Document a function (or a macro) with `@`-tags in the comment block directly
 above it:
@@ -76,7 +78,7 @@ example_add_library(
 A complete, runnable example lives in
 [`examples/`](https://github.com/segoon/cmake2md/tree/master/examples).
 
-## Comment syntax
+### Comment syntax
 
 A doc comment is the run of `#` comment lines immediately above a `function()`,
 a `macro()` or a command call. A blank line ends the run. The block is dedented
@@ -142,34 +144,6 @@ prose, just the end of the comment or another tag — is a harder error still:
 there is no literal text to fall back to keeping, so it fails the run even
 under `--no-strict`.
 
-### Tags of your own
-
-The vocabulary above is what cmake2md means by a tag; what a *project* wants to
-record — an owner, a rationale, a ticket — is its own business. Declare it in
-the config file:
-
-```toml
-[tags]
-author = { label = "Author:" }
-rationale = { text = "block", label = "Why:" }
-ticket = { takes_name = true, label = "Ticket:" }
-```
-
-and `@author` is a tag like any other: recognised rather than reported,
-rendered by the built-in template as `> **Author:** …`, and reachable from a
-template of your own as `doc.of_kind('author')`.
-
-| Setting | Meaning |
-|---------|---------|
-| `text` | `paragraph`, the default, ends at a blank line as `@note` does; `block` runs to the next tag, so the text may span paragraphs. |
-| `takes_name` | Whether a name follows the tag, as after `@ingroup`. It arrives as the section's `.name`. |
-| `label` | What a template calls it. Defaults to the tag's own name. |
-
-A declared tag opens a section, which is where anything a template has to
-render lives. A flag such as `@internal` or a field such as `@ingroup` cannot
-be declared this way: those write to a field of the parsed comment, and one of
-your own devising would have nowhere to be written.
-
 ### Checking the comment against the code
 
 A CMake function states its interface twice — once in the doc comment, once in
@@ -222,139 +196,9 @@ fenced code block, which is left alone unless it is fenced as `cmake`.
 
 `--no-strict` demotes these to warnings as well.
 
-### Adding a tag
+## Integration into a CMake project
 
-The vocabulary is deliberately small and lives in one place, as data:
-`TAG_SPECS` in
-[`src/cmake2md/doc_parser.py`](https://github.com/segoon/cmake2md/blob/master/src/cmake2md/doc_parser.py),
-where each tag declares what it attaches to — a parameter, a section, a field
-of the comment, a field of the parameter above it. Adding one is adding a row;
-[DEVELOPMENT.md](DEVELOPMENT.md) has the table.
-
-## Writing templates
-
-Templates receive five lists:
-
-- `symbols` — every `function()` and `macro()`, documented or not
-- `variables` — every cache entry a user can set: `option()` and
-  `set(... CACHE ...)`, parsed
-- `commands` — every command call (`option()`, `set()`, …), including calls
-  nested in a `function()` body or an `if()` block
-- `groups` — every `@defgroup`, in the order they were defined, each with a
-  `name`, a `title` and a `description`
-- `files` — the `@file` comment blocks, each with the `doc` of the block
-
-They are unfiltered on purpose: the `documented` filter drops the entries
-that carry no comment, `public` drops the ones marked `@internal`, and
-`only_command` selects the commands you actually document.
-
-Each entry is a dict with:
-
-| Key | Description |
-|-----|-------------|
-| `name` | Function, macro or command name. |
-| `doc` | Parsed comment: `.description`, `.brief`, `.group`, `.deprecated`, `.internal`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.sections`, `.warnings`, and the `.of_kind(kind)` method. |
-| `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
-| `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
-| `comments` | The raw comment lines, dedented. |
-| `comments_line` | Line the comment block starts on, or `0` when there is none. |
-| `type_` | Symbols: `'function'` or `'macro'`. Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
-| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
-| `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
-| `command` | Variables only: `'option'` or `'set'`. |
-| `default` | Variables only: the value the entry holds unless the user overrides it. |
-| `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
-| `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
-| `advanced` | Variables only: whether `mark_as_advanced()` hides it from the ordinary user. |
-| `filepath`, `line`, `location` | Where the symbol was found. |
-
-Each parameter in `doc.args` / `doc.options` / `doc.params` /
-`doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
-`.kind`, `.line`, and `.type_` and `.default` from `@type` and `@default`.
-Each entry of `doc.sections` has `.kind` — the tag that opened it, without the
-`@` — `.text`, `.name`, `.line` and `.label`, which is what the tag says a
-template should call it.
-
-### Groups
-
-`@ingroup` puts a symbol in a group; `@defgroup`, in a comment block that
-documents nothing else, gives that group a title and a description:
-
-```cmake
-# @defgroup build Build targets
-#
-# What gets built, and what is left out.
-```
-
-They arrive as `groups`, in the order they were defined, so a template writes
-the whole document without naming a single group:
-
-```jinja
-{% for group in groups %}
-## {{ group.title }}
-
-{{ group.description }}
-
-{{ render(symbols | documented | only_group(group.name)) }}
-{% endfor %}
-```
-
-Once any group is defined, an `@ingroup` naming one that is not is reported —
-until then `@ingroup` is a bare label, which is how it worked before, and
-nothing is checked.
-
-### Build options
-
-`option(NAME "help" ON)` and `set(NAME value CACHE TYPE "help")` declare the
-same thing in a different order, so `variables` gives both of them one shape:
-
-```jinja
-| Option | Description | Default |
-|--------|-------------|---------|
-{%- for v in variables | only_group('build') %}
-| `{{ v.name }}` | {{ v.docstring | md_escape }} | `{{ v.default }}` |
-{%- endfor %}
-```
-
-A `set()` that writes no cache entry is a local variable rather than something
-to configure, so it is not in the list; it is still in `commands`. A
-`set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
-
-### Filters
-
-| Filter | Purpose |
-|--------|---------|
-| `unquote` | Strip surrounding double quotes from a CMake argument. |
-| `escape` | Quote a value containing `$` so it does not read as a variable reference. |
-| `md_escape` | Escape `\|` and `\` so a string is safe inside a Markdown table cell. |
-| `oneline` | Join CMake line continuations. |
-| `only_command(name)` | Keep only commands with the given name. |
-| `only_group(name)` | Keep only entries in the given `@ingroup` (use `None` for ungrouped). |
-| `documented` | Keep only entries that carry a doc comment. |
-| `public` | Drop the entries marked `@internal`. |
-| `anchor` | The anchor a Markdown heading holding the given text gets. |
-| `symbol_link(symbols)` | Link a name to its own section when `symbols` defines it, else leave it as written. |
-| `render` | Concatenate the `pretty` field of a collection. |
-
-### The built-in templates
-
-Two templates ship with cmake2md, and `--list-templates` names them.
-
-`reference.md.jinja` is a whole document: a table of contents, every
-documented function and macro laid out by `@defgroup`, and a table of the
-build options. A project that wants documentation without writing a template
-needs only:
-
-```sh
-cmake2md --template reference.md.jinja --output docs/reference.md .
-```
-
-`function.md.jinja` renders a single symbol, and is what fills
-`symbol.pretty`; put a file of that name in a `--template-dir` (or the working
-directory) to change how every symbol is rendered. It also works as a whole
-document, listing every documented symbol and nothing else.
-
-## Command line
+### Command line
 
 ```
 cmake2md [-t TEMPLATE -o OUTPUT]... [-I DIR]... [-c FILE] [--inject]
@@ -398,7 +242,7 @@ outright; neither is required to be documented.
 A `.cmake2mdignore` file at the project root lists further `--exclude`
 patterns, one per line, `#` starting a comment.
 
-### The config file
+#### The config file
 
 A CI step that renders three templates needs six paired arguments to say so,
 and they then have to be kept in step across a Makefile, a workflow file and a
@@ -434,7 +278,7 @@ The one setting with no option behind it is the `[tags]` table of
 [tags of your own](#tags-of-your-own): a vocabulary is a property of the
 project, not of the run.
 
-### Injecting into a README
+#### Injecting into a README
 
 `--inject` keeps the documentation inside a file the author writes, rather
 than in one of its own. Mark the place once:
@@ -449,22 +293,7 @@ than in one of its own. Mark the place once:
 and everything between the markers is replaced on each run, leaving the prose
 around them alone. It composes with `--check`.
 
-### JSON
-
-`--json` writes the same model a template is given:
-
-```json
-{
-  "schema_version": 1,
-  "symbols": [{"name": "example_add_library", "doc": {"brief": "…"}}],
-  "variables": [], "commands": [], "groups": [], "files": []
-}
-```
-
-`schema_version` is bumped when a field disappears or changes meaning, never
-when one is added, so a consumer must ignore the fields it does not know.
-
-## From CMake
+### From CMake
 
 `cmake/cmake2md.cmake` adds targets that run cmake2md as part of the build, so
 a project documents its own CMake code without a separate script to remember.
@@ -491,7 +320,7 @@ current source directory, which is where it looks for that file.
 The module is documented with cmake2md's own tags, so it also serves as a
 worked example.
 
-## In CI
+### In CI
 
 A pre-commit hook:
 
@@ -514,6 +343,174 @@ A GitHub Action:
   with:
     args: --check --template reference.md.jinja --output docs/reference.md .
 ```
+
+## Advanced features
+
+### Writing templates
+
+Templates receive five lists:
+
+- `symbols` — every `function()` and `macro()`, documented or not
+- `variables` — every cache entry a user can set: `option()` and
+  `set(... CACHE ...)`, parsed
+- `commands` — every command call (`option()`, `set()`, …), including calls
+  nested in a `function()` body or an `if()` block
+- `groups` — every `@defgroup`, in the order they were defined, each with a
+  `name`, a `title` and a `description`
+- `files` — the `@file` comment blocks, each with the `doc` of the block
+
+They are unfiltered on purpose: the `documented` filter drops the entries
+that carry no comment, `public` drops the ones marked `@internal`, and
+`only_command` selects the commands you actually document.
+
+Each entry is a dict with:
+
+| Key | Description |
+|-----|-------------|
+| `name` | Function, macro or command name. |
+| `doc` | Parsed comment: `.description`, `.brief`, `.group`, `.deprecated`, `.internal`, `.args`, `.options`, `.params`, `.multi_params`, `.returns`, `.sections`, `.warnings`, and the `.of_kind(kind)` method. |
+| `group` | Shorthand for `doc.group`, i.e. the `@ingroup` value or `None`. |
+| `pretty` | Symbol rendered via `function.md.jinja`; for commands, the plain description. |
+| `comments` | The raw comment lines, dedented. |
+| `comments_line` | Line the comment block starts on, or `0` when there is none. |
+| `type_` | Symbols: `'function'` or `'macro'`. Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
+| `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
+| `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
+| `command` | Variables only: `'option'` or `'set'`. |
+| `default` | Variables only: the value the entry holds unless the user overrides it. |
+| `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
+| `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
+| `advanced` | Variables only: whether `mark_as_advanced()` hides it from the ordinary user. |
+| `filepath`, `line`, `location` | Where the symbol was found. |
+
+Each parameter in `doc.args` / `doc.options` / `doc.params` /
+`doc.multi_params` / `doc.returns` has `.name`, `.description`, `.required`,
+`.kind`, `.line`, and `.type_` and `.default` from `@type` and `@default`.
+Each entry of `doc.sections` has `.kind` — the tag that opened it, without the
+`@` — `.text`, `.name`, `.line` and `.label`, which is what the tag says a
+template should call it.
+
+#### Groups
+
+`@ingroup` puts a symbol in a group; `@defgroup`, in a comment block that
+documents nothing else, gives that group a title and a description:
+
+```cmake
+# @defgroup build Build targets
+#
+# What gets built, and what is left out.
+```
+
+They arrive as `groups`, in the order they were defined, so a template writes
+the whole document without naming a single group:
+
+```jinja
+{% for group in groups %}
+## {{ group.title }}
+
+{{ group.description }}
+
+{{ render(symbols | documented | only_group(group.name)) }}
+{% endfor %}
+```
+
+Once any group is defined, an `@ingroup` naming one that is not is reported —
+until then `@ingroup` is a bare label, which is how it worked before, and
+nothing is checked.
+
+#### Build options
+
+`option(NAME "help" ON)` and `set(NAME value CACHE TYPE "help")` declare the
+same thing in a different order, so `variables` gives both of them one shape:
+
+```jinja
+| Option | Description | Default |
+|--------|-------------|---------|
+{%- for v in variables | only_group('build') %}
+| `{{ v.name }}` | {{ v.docstring | md_escape }} | `{{ v.default }}` |
+{%- endfor %}
+```
+
+A `set()` that writes no cache entry is a local variable rather than something
+to configure, so it is not in the list; it is still in `commands`. A
+`set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
+
+#### Filters
+
+| Filter | Purpose |
+|--------|---------|
+| `unquote` | Strip surrounding double quotes from a CMake argument. |
+| `escape` | Quote a value containing `$` so it does not read as a variable reference. |
+| `md_escape` | Escape `\|` and `\` so a string is safe inside a Markdown table cell. |
+| `oneline` | Join CMake line continuations. |
+| `only_command(name)` | Keep only commands with the given name. |
+| `only_group(name)` | Keep only entries in the given `@ingroup` (use `None` for ungrouped). |
+| `documented` | Keep only entries that carry a doc comment. |
+| `public` | Drop the entries marked `@internal`. |
+| `anchor` | The anchor a Markdown heading holding the given text gets. |
+| `symbol_link(symbols)` | Link a name to its own section when `symbols` defines it, else leave it as written. |
+| `render` | Concatenate the `pretty` field of a collection. |
+
+#### The built-in templates
+
+Two templates ship with cmake2md, and `--list-templates` names them.
+
+`reference.md.jinja` is a whole document: a table of contents, every
+documented function and macro laid out by `@defgroup`, and a table of the
+build options. A project that wants documentation without writing a template
+needs only:
+
+```sh
+cmake2md --template reference.md.jinja --output docs/reference.md .
+```
+
+`function.md.jinja` renders a single symbol, and is what fills
+`symbol.pretty`; put a file of that name in a `--template-dir` (or the working
+directory) to change how every symbol is rendered. It also works as a whole
+document, listing every documented symbol and nothing else.
+
+### Tags of your own
+
+The vocabulary above is what cmake2md means by a tag; what a *project* wants to
+record — an owner, a rationale, a ticket — is its own business. Declare it in
+the config file:
+
+```toml
+[tags]
+author = { label = "Author:" }
+rationale = { text = "block", label = "Why:" }
+ticket = { takes_name = true, label = "Ticket:" }
+```
+
+and `@author` is a tag like any other: recognised rather than reported,
+rendered by the built-in template as `> **Author:** …`, and reachable from a
+template of your own as `doc.of_kind('author')`.
+
+| Setting | Meaning |
+|---------|---------|
+| `text` | `paragraph`, the default, ends at a blank line as `@note` does; `block` runs to the next tag, so the text may span paragraphs. |
+| `takes_name` | Whether a name follows the tag, as after `@ingroup`. It arrives as the section's `.name`. |
+| `label` | What a template calls it. Defaults to the tag's own name. |
+
+A declared tag opens a section, which is where anything a template has to
+render lives. A flag such as `@internal` or a field such as `@ingroup` cannot
+be declared this way: those write to a field of the parsed comment, and one of
+your own devising would have nowhere to be written.
+
+### JSON
+
+`--json` writes the same model a template is given:
+
+```json
+{
+  "schema_version": 1,
+  "symbols": [{"name": "example_add_library", "doc": {"brief": "…"}}],
+  "variables": [], "commands": [], "groups": [], "files": []
+}
+```
+
+`schema_version` is bumped when a field disappears or changes meaning, never
+when one is added, so a consumer must ignore the fields it does not know.
 
 ## Development
 
