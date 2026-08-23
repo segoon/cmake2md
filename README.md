@@ -395,7 +395,9 @@ require-docs = true
 
 and the CI step is `cmake2md` with nothing after it. Every long option has a
 setting of the same name, with `-` or `_` between words, and a lone string is
-accepted where a list belongs. Anything given on the command line wins over
+accepted where a list belongs. A setting of the wrong type is refused rather
+than coerced: `strict = "no"` is a string, and every non-empty string is true,
+so taking it would mean doing the opposite of what it says. Anything given on the command line wins over
 the file, so `cmake2md --output - .` still prints to the terminal — and a flag
 turned off explicitly counts as given, so `--no-strict` wins over a
 `strict = true` in the file.

@@ -27,10 +27,17 @@ TABLE = 'tool.cmake2md'
 
 
 class Kind(enum.Enum):
-    """The shape a setting's value has to have."""
+    """The value a setting has to have.
 
+    Named after the type rather than after the shape, because that is what
+    has to be checked: ``strict = "no"`` is a string, and every non-empty
+    string is true, so a setting left unchecked reads as the opposite of what
+    it says.
+    """
+
+    Bool = 'bool'
+    Str = 'str'
     List = 'list'
-    Scalar = 'scalar'
     #: The [tool.cmake2md.tags] sub-table, which declares tags of the
     #: project's own.
     Tags = 'tags'
@@ -44,11 +51,11 @@ KEYS = {
     'template_dir': Kind.List,
     'path': Kind.List,
     'exclude': Kind.List,
-    'json': Kind.Scalar,
-    'inject': Kind.Scalar,
-    'strict': Kind.Scalar,
-    'check': Kind.Scalar,
-    'require_docs': Kind.Scalar,
+    'json': Kind.Str,
+    'inject': Kind.Bool,
+    'strict': Kind.Bool,
+    'check': Kind.Bool,
+    'require_docs': Kind.Bool,
     'tags': Kind.Tags,
 }
 
@@ -72,9 +79,10 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     except tomli.TOMLDecodeError as exc:
         raise UsageError(f'{path} is not valid TOML: {exc}') from exc
 
+    where = f'{path}: [{TABLE}]'
     table = data.get('tool', {}).get('cmake2md', {})
     if not isinstance(table, dict):
-        raise UsageError(f'{path}: [{TABLE}] must be a table')
+        raise UsageError(f'{where} must be a table')
 
     settings: dict[str, Any] = {}
     for key, value in table.items():
@@ -82,31 +90,37 @@ def load(path: pathlib.Path) -> dict[str, Any]:
         if name not in KEYS:
             known = ', '.join(sorted(KEYS))
             raise UsageError(
-                f'{path}: [{TABLE}] has no setting called {key}; '
-                f'the settings are: {known}'
+                f'{where} has no setting called {key}; the settings are: {known}'
             )
         match KEYS[name]:
+            case Kind.Bool:
+                settings[name] = _as_bool(where, key, value)
+            case Kind.Str:
+                settings[name] = _as_str(where, key, value)
             case Kind.List:
-                settings[name] = _as_list(path, key, value)
+                settings[name] = _as_list(where, key, value)
             case Kind.Tags:
-                settings[name] = _as_tags(path, value)
-            case Kind.Scalar:
-                settings[name] = value
+                settings[name] = _as_tags(f'{path}: [{TABLE}.tags]', value)
     return settings
 
 
-def _as_list(path: pathlib.Path, key: str, value: Any) -> list[str]:
+def _as_str(where: str, key: str, value: Any) -> str:
+    if not isinstance(value, str):
+        raise UsageError(f'{where} {key} must be a string')
+    return value
+
+
+def _as_list(where: str, key: str, value: Any) -> list[str]:
     """Accept a lone string where a list is expected, as TOML users expect."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return list(value)
-    raise UsageError(f'{path}: [{TABLE}] {key} must be a string or a list of them')
+    raise UsageError(f'{where} {key} must be a string or a list of them')
 
 
-def _as_tags(path: pathlib.Path, value: Any) -> dict[str, doc_parser.TagSpec]:
+def _as_tags(where: str, value: Any) -> dict[str, doc_parser.TagSpec]:
     """Read [tool.cmake2md.tags] as the vocabulary the parser understands."""
-    where = f'{path}: [{TABLE}.tags]'
     if not isinstance(value, dict):
         raise UsageError(f'{where} must be a table, one entry per tag')
 
@@ -137,13 +151,14 @@ def _as_tag(where: str, name: str, settings: Any) -> doc_parser.TagSpec:
             f'a tag takes: {", ".join(sorted(TAG_KEYS))}'
         )
 
+    here = f'{where} {name}:'
     return doc_parser.TagSpec(
         target=doc_parser.TagTarget.Section,
-        takes_name=_as_bool(where, name, settings.get('takes_name', False)),
+        takes_name=_as_bool(here, 'takes_name', settings.get('takes_name', False)),
         text=_as_text(where, name, settings.get('text', 'paragraph')),
         # Without a label of its own the tag is its own label, which reads
         # well enough for the @author and @rationale sort of tag.
-        label=str(settings.get('label') or f'{name.capitalize()}:'),
+        label=_as_str(here, 'label', settings.get('label') or f'{name.capitalize()}:'),
     )
 
 
@@ -153,9 +168,14 @@ def _is_tag_name(name: str) -> bool:
     return match is not None
 
 
-def _as_bool(where: str, name: str, value: Any) -> bool:
+def _as_bool(where: str, key: str, value: Any) -> bool:
+    """A flag, and nothing that merely reads as one.
+
+    TOML has a boolean, so a string here is a mistake — and one that would
+    otherwise pass silently, since 'no' and 'false' are both true.
+    """
     if not isinstance(value, bool):
-        raise UsageError(f'{where} {name}: takes_name must be true or false')
+        raise UsageError(f'{where} {key} must be true or false')
     return value
 
 

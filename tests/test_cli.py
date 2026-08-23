@@ -825,6 +825,29 @@ def test_a_pyproject_without_our_table_is_not_a_config_file(
     assert 'no --template given' in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    'setting, message',
+    [
+        # 'no' is a non-empty string and so reads as true: a setting the file
+        # got wrong must be refused, not silently taken to mean its opposite.
+        ('strict = "no"', 'strict must be true or false'),
+        ('check = 1', 'check must be true or false'),
+        ('json = 3', 'json must be a string'),
+        ('template = 3', 'template must be a string or a list of them'),
+        ('tags = 3', '[tool.cmake2md.tags] must be a table'),
+    ],
+)
+def test_a_setting_of_the_wrong_type_is_refused(
+    setting, message, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'pyproject.toml').write_text(
+        f'[tool.cmake2md]\n{setting}\n', encoding='utf-8'
+    )
+    assert run() == 1
+    assert message in capsys.readouterr().err
+
+
 def test_an_unknown_setting_names_the_ones_there_are(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / 'pyproject.toml').write_text(

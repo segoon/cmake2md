@@ -108,6 +108,9 @@
   warnings and carries on.
 - A flag turned off on the command line now beats the config file, which used
   to win over it because "off" and "unsaid" were the same value.
+- A config setting of the wrong type is refused rather than taken as it comes.
+  `strict = "no"` used to turn strict *on*, every non-empty string being true;
+  now it says so. The lists were already checked; the rest were not.
 
 ## 0.1.0 (2026-08-22)
 
