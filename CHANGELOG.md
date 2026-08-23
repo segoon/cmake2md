@@ -29,6 +29,9 @@
   only when a template rendered `function.md.jinja` as a whole document. The
   built-in `reference.md.jinja`, and any template reaching a symbol through
   `symbol.pretty`, now link it the same way.
+- An unwritable output directory or an unreadable `.cmake2mdignore` is
+  reported as a sentence naming the file, like every other I/O problem
+  already was, instead of a Python traceback.
 
 ### Added
 

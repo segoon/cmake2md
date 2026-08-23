@@ -4,6 +4,7 @@ import pytest
 
 from cmake2md import cli
 from cmake2md import config
+from cmake2md.errors import UsageError
 
 TEMPLATE = """\
 {% for symbol in symbols %}
@@ -124,6 +125,29 @@ def test_check_reports_missing_output(cmake_file, template, tmp_path):
     out = tmp_path / 'out.md'
     assert run('--check', '-t', template, '-o', out, cmake_file) == 1
     assert not out.exists()
+
+
+def test_write_output_reports_an_os_error_instead_of_a_traceback(tmp_path, monkeypatch):
+    def fail_to_write(self, *args, **kwargs):
+        raise OSError(13, 'Permission denied')
+
+    monkeypatch.setattr(pathlib.Path, 'write_text', fail_to_write)
+    out = tmp_path / 'out.md'
+    with pytest.raises(UsageError, match=f'cannot write {out}: Permission denied'):
+        cli.write_output(out, 'content\n', check=False)
+
+
+def test_read_ignore_file_reports_an_os_error_instead_of_a_traceback(
+    tmp_path, monkeypatch
+):
+    (tmp_path / cli.IGNORE_FILE).write_text('*.cmake\n', encoding='utf-8')
+
+    def fail_to_read(self, *args, **kwargs):
+        raise OSError(13, 'Permission denied')
+
+    monkeypatch.setattr(pathlib.Path, 'read_text', fail_to_read)
+    with pytest.raises(UsageError, match='cannot read .*: Permission denied'):
+        cli.read_ignore_file(tmp_path)
 
 
 UNKNOWN_TAG_SOURCE = """\

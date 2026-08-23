@@ -270,7 +270,7 @@ def read_ignore_file(directory: pathlib.Path) -> list[str]:
         return []
     return [
         line.strip()
-        for line in path.read_text(encoding='utf-8').splitlines()
+        for line in _read_text(path).splitlines()
         if line.strip() and not line.lstrip().startswith('#')
     ]
 
@@ -480,6 +480,13 @@ def warn_duplicate_symbols(symbols: Sequence[parse.Symbol]) -> None:
             )
 
 
+def _read_text(path: pathlib.Path) -> str:
+    try:
+        return path.read_text(encoding='utf-8')
+    except OSError as exc:
+        raise UsageError(f'cannot read {path}: {exc.strerror}') from exc
+
+
 def write_output(
     path: pathlib.Path, content: str, check: bool, inject: bool = False
 ) -> bool:
@@ -490,13 +497,13 @@ def write_output(
                 f'--inject needs {path} to exist already, with the markers to '
                 'inject between'
             )
-        content = rendering.inject(path.read_text(encoding='utf-8'), content, str(path))
+        content = rendering.inject(_read_text(path), content, str(path))
 
     if check:
         if not path.exists():
             print(f'{path}: would be created', file=sys.stderr)
             return False
-        current = path.read_text(encoding='utf-8')
+        current = _read_text(path)
         if current == content:
             return True
         print(f'{path}: out of date', file=sys.stderr)
@@ -512,10 +519,14 @@ def write_output(
         )
         return False
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Explicit newline: on Windows the default would write CRLF, so generated
-    # documentation would differ per platform and --check would never settle.
-    path.write_text(content, encoding='utf-8', newline='\n')
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Explicit newline: on Windows the default would write CRLF, so
+        # generated documentation would differ per platform and --check
+        # would never settle.
+        path.write_text(content, encoding='utf-8', newline='\n')
+    except OSError as exc:
+        raise UsageError(f'cannot write {path}: {exc.strerror}') from exc
     return True
 
 
