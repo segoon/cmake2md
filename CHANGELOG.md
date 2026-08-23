@@ -53,6 +53,9 @@
 - An `@ingroup` inside a standalone comment block is now checked against the
   groups `@defgroup` actually defines, like one on a function, macro,
   variable or command already was.
+- A `##` line comment no longer keeps a stray `#` in its text; CMake attaches
+  no meaning to how many `#` a comment line opens with, so a Doxygen-style
+  `##` is stripped the same as a lone `#`.
 
 ### Added
 

@@ -184,7 +184,11 @@ def comment_text(file: File, node: Node) -> list[str]:
     """
     text = file.get_text(node)
     if node.type != 'bracket_comment':
-        return [text.removeprefix('#')]
+        # CMake attaches no meaning to how many '#' a comment line opens
+        # with; a Doxygen-style '##' is exactly as common as a lone '#', and
+        # stripping only one would leave the other as a stray character of
+        # content.
+        return [text.lstrip('#')]
 
     opening = BRACKET_OPEN_RE.match(text)
     if opening is None:

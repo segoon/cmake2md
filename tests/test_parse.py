@@ -58,6 +58,15 @@ def test_comment_block_without_a_common_indent_is_left_alone(tmp_path):
     assert parse.extract_symbols(file)[0].comments == ['no space', ' spaced']
 
 
+def test_a_doubled_hash_does_not_leave_a_stray_one(tmp_path):
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '## Adds a thing.\nfunction(f)\nendfunction()\n', encoding='utf-8'
+    )
+    file = parse.parse_file(source)
+    assert parse.extract_symbols(file)[0].comments == ['Adds a thing.']
+
+
 def test_blank_line_terminates_a_comment_block(tmp_path):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text(
