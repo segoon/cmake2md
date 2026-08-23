@@ -81,8 +81,9 @@
 
 ### Dependencies
 
-- `tomli`, on Python 3.10 only, to read the config file. From 3.11 the same
-  parser is `tomllib` in the standard library, and nothing is installed.
+- `tomli`, to read the config file. The standard library has the same parser
+  as `tomllib` from 3.11 on, but taking whichever is present would mean a
+  version check and a branch that only the oldest supported interpreter runs.
 
 ### Changed
 

@@ -34,9 +34,10 @@ dependencies = [
     # Must be ABI-compatible with the tree-sitter core above; a mismatch
     # surfaces as "Incompatible Language version" at import time.
     "tree-sitter-cmake>=0.5",
-    # The TOML parser of the config file.  tomllib is the same code in the
-    # standard library from 3.11 on, so this is installed nowhere else.
-    "tomli>=2.0; python_version < '3.11'",
+    # The TOML parser of the config file.  Used on every version rather than
+    # only below 3.11, where tomllib is the same parser under another name:
+    # one code path beats a version check and a branch almost nobody runs.
+    "tomli>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -98,13 +99,6 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["tree_sitter_cmake.*"]
-ignore_missing_imports = true
-
-# mypy checks against 3.10, where the tomli branch of cmake2md.config is the
-# live one, but tomli is not installed on the 3.11+ interpreters that run it.
-# The names it provides are pinned by annotations there, so nothing is lost.
-[[tool.mypy.overrides]]
-module = ["tomli.*"]
 ignore_missing_imports = true
 
 # Tests need no annotations of their own: check_untyped_defs stays on, so their
