@@ -45,6 +45,13 @@ class EnrichedVariable(parse.Variable):
 
 
 @dataclasses.dataclass
+class EnrichedTarget(parse.Target):
+    doc: doc_parser.DocComment = dataclasses.field(kw_only=True)
+    group: str | None = dataclasses.field(kw_only=True)
+    pretty: str = dataclasses.field(kw_only=True)
+
+
+@dataclasses.dataclass
 class EnrichedBlock(parse.Block):
     doc: doc_parser.DocComment = dataclasses.field(kw_only=True)
     group: str | None = dataclasses.field(kw_only=True)
@@ -55,7 +62,7 @@ class Item(Protocol):
     """What a template filter needs from one entry, regardless of kind.
 
     Structural rather than `EnrichedSymbol | EnrichedCommand |
-    EnrichedVariable | EnrichedBlock`: a filter like
+    EnrichedVariable | EnrichedTarget | EnrichedBlock`: a filter like
     `documented`/`public`/`only_group` only ever touches these five fields,
     and every `Enriched*` above satisfies this automatically.
     """
@@ -82,6 +89,7 @@ class Context:
 
     symbols: list[EnrichedSymbol]
     variables: list[EnrichedVariable]
+    targets: list[EnrichedTarget]
     commands: list[EnrichedCommand]
     groups: list[Group]
     files: list[EnrichedBlock]

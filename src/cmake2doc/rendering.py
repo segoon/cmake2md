@@ -11,9 +11,26 @@ import jinja2
 from . import entries
 from .errors import UsageError
 
+
+class InjectMarkers(NamedTuple):
+    begin: str
+    end: str
+
+
 #: Markers that delimit the generated part of a file written with --inject.
-INJECT_BEGIN = '<!-- BEGIN_CMAKE2MD -->'
-INJECT_END = '<!-- END_CMAKE2MD -->'
+#: HTML comments are invisible in Markdown but not in reStructuredText, where
+#: docutils renders `<!-- -->` as literal text; `.rst` outputs get an rST
+#: comment (a `.. ` line that matches no directive) instead.
+MARKDOWN_MARKERS = InjectMarkers('<!-- BEGIN_CMAKE2MD -->', '<!-- END_CMAKE2MD -->')
+RST_MARKERS = InjectMarkers('.. BEGIN_CMAKE2MD', '.. END_CMAKE2MD')
+
+
+def markers_for(path: str) -> InjectMarkers:
+    """Pick --inject's markers from the output file's own extension."""
+    if pathlib.PurePath(path).suffix == '.rst':
+        return RST_MARKERS
+    return MARKDOWN_MARKERS
+
 
 #: Name of the template used to render each function into ``symbol.pretty``.
 #: Shadowing this file from a `--template-dir` overrides the built-in one.
@@ -213,17 +230,18 @@ def inject(existing: str, content: str, path: str) -> str:
     in a file of its own: the prose around the markers is the author's, and
     only what is between them is ours to replace.
     """
-    begin = existing.find(INJECT_BEGIN)
-    end = existing.find(INJECT_END)
+    markers = markers_for(path)
+    begin = existing.find(markers.begin)
+    end = existing.find(markers.end)
     if begin == -1 or end == -1:
         raise UsageError(
             f'{path} has no place to inject into; it needs a line saying '
-            f'{INJECT_BEGIN} and a later one saying {INJECT_END}'
+            f'{markers.begin} and a later one saying {markers.end}'
         )
     if end < begin:
         raise UsageError(
-            f'{path} has {INJECT_END} before {INJECT_BEGIN}, so there is '
+            f'{path} has {markers.end} before {markers.begin}, so there is '
             'nothing between them'
         )
-    head = existing[: begin + len(INJECT_BEGIN)]
+    head = existing[: begin + len(markers.begin)]
     return f'{head}\n{content.strip()}\n\n{existing[end:]}'

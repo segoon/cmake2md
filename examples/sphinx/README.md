@@ -36,3 +36,15 @@ docutils, unlike [`../rest/reference.rst`](../rest/reference.rst): it uses
 `versionadded`, `deprecated`, `code-block` and the domain directives, all of
 which Sphinx provides. Nothing here is built in CI — the output is checked as
 text.
+
+`--inject` looks for an rST comment (`.. BEGIN_CMAKE2MD` / `.. END_CMAKE2MD`)
+rather than an HTML one when the `--output` file ends in `.rst`, so this
+template can be injected straight into a hand-written Sphinx source page the
+same way the plain rST example injects into one:
+
+```shell
+cmake2doc --inject \
+    --template examples/sphinx/reference.rst.jinja \
+    --output docs/reference.rst \
+    examples/sphinx/CMakeLists.txt
+```

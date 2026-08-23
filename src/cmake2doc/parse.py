@@ -147,6 +147,33 @@ class Variable(Documented):
         return 'option' if self.command == 'option' else 'cache variable'
 
 
+#: The command that created a Target, and the noun its `kind` reads as.
+TARGET_KINDS = {
+    'add_library': 'library',
+    'add_executable': 'executable',
+    'add_test': 'test',
+    'add_custom_target': 'custom target',
+}
+
+
+@dataclasses.dataclass
+class Target(Documented):
+    """A named build target: add_library(), add_executable(), add_test() or
+    add_custom_target().
+
+    add_custom_command() names no target of its own -- it attaches to an
+    OUTPUT file or an existing TARGET -- so it stays a plain Command instead.
+    """
+
+    #: The command that created it: one of the keys of TARGET_KINDS.
+    command: str
+    args: list[str]
+
+    @property
+    def kind(self) -> str:
+        return TARGET_KINDS[self.command]
+
+
 @dataclasses.dataclass
 class Block(Documented):
     """A comment block that documents nothing but itself.
@@ -660,6 +687,50 @@ def extract_variables(file: File) -> list[Variable]:
             )
         )
     return variables
+
+
+def target_name_argument(
+    name: str, arguments: Sequence[Node], file: File
+) -> Node | None:
+    """The argument naming the target `name` creates, if any.
+
+    Every TARGET_KINDS command names its target in arguments[0], except
+    add_test()'s NAME form -- add_test(NAME <name> COMMAND ...) -- where the
+    name follows the literal keyword instead.
+    """
+    if not arguments:
+        return None
+    if name == 'add_test' and argument_name(file, arguments[0]) == 'NAME':
+        return arguments[1] if len(arguments) > 1 else None
+    return arguments[0]
+
+
+def extract_targets(file: File) -> list[Target]:
+    """Extract the targets add_library()/add_executable()/add_test()/
+    add_custom_target() define, documented or not."""
+    targets = []
+
+    for command, name, arguments in command_calls(file):
+        if name not in TARGET_KINDS:
+            continue
+        name_argument = target_name_argument(name, arguments, file)
+        # A computed name is nothing a reader could look up.
+        if name_argument is None or contains_variable_ref(name_argument):
+            continue
+
+        block = get_comments(file, command)
+        targets.append(
+            Target(
+                name=argument_name(file, name_argument),
+                command=name,
+                args=[file.get_text(argument) for argument in arguments],
+                comments=block.lines,
+                comments_line=block.line,
+                filepath=file.filepath,
+                line=command.start_point.row + 1,
+            )
+        )
+    return targets
 
 
 def extract_blocks(file: File) -> list[Block]:

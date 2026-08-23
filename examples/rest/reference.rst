@@ -30,6 +30,7 @@ journey into reStructuredText.
 :option EXCLUDE_FROM_ALL: do not build this target by default
 :param OUTPUT_NAME <value>: file name of the produced artifact
 :param SOURCES <value>...: the source files to compile
+:since: 0.2
 
 .. code:: cmake
 
@@ -41,6 +42,27 @@ journey into reStructuredText.
 .. note::
 
    Call this after project(), so that the compiler is known.
+
+example_add_test
+~~~~~~~~~~~~~~~~
+
+.. warning::
+
+   Deprecated.
+
+Registers a test executable.
+
+use example_add_library() instead.
+
+.. code:: cmake
+
+   example_add_test(
+       <NAME>
+       [TIMEOUT <value>]
+   )
+
+:param NAME: the name of the test
+:param TIMEOUT <value>: seconds before the test is considered hung
 
 example_toolchain_version
 ~~~~~~~~~~~~~~~~~~~~~~~~~

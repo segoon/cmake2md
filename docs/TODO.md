@@ -1,23 +1,9 @@
 # TODO
 
-## Random thoughts
-
-* document how `include()`/`add_subdirectory()` should be handled (list dirs explicitly)
-* rename to cmake2doc
-
-## Redundancy and duplication
-
-* The context entry is `dict[str, Any]` throughout `cli`, `rendering` and
-  `serialize`, which is the `Any` the project's own rules rule out. A small
-  dataclass with an `asdict()` would type the whole render path.
-
 ## From the CMinx comparison
 
-Candidates, not decisions — raised by comparing cmake2doc with
 [CMinx](https://github.com/CMakePP/CMinx), the other CMake documentation
-generator. Two of the four are done: `reference.rst.jinja` ships as a built-in
-and the prior-art table now says when to pick CMinx. `include()` following
-came up too and stays decided against, below.
+generator.
 
 * The per-symbol template name is the constant `FUNCTION_TEMPLATE_NAME =
   'function.md.jinja'`, so `symbol.pretty` is Markdown in every run and a
@@ -32,20 +18,8 @@ came up too and stays decided against, below.
   it leaves the user unable to tell "checked and fine" from "not checked at
   all". A `--verbose` line naming the symbols left unchecked, and why, would
   make the coverage visible without weakening the rule.
-* Targets and tests — `add_library()`, `add_executable()`, `add_test()` — are
-  reachable only through the generic `commands` list, so a template wanting a
-  table of them has to parse the raw `args` itself. CMinx treats them as
-  first-class. Whether they belong in a *module* documentation tool is the
-  open question.
 
 ## Decided against
 
 Recorded so they are not revisited: `@copydoc`, following `include()` and
 `add_subdirectory()`, HTML themes, a client-side search index.
-
-reStructuredText output used to be on this list, on the grounds that CMinx and
-upstream CMake cover it. It came off once the CMinx comparison made the cost
-plain: cmake2doc renders through Jinja, so rST is a template rather than a
-backend. What is still not on the roadmap is *building* a site — no Sphinx
-project, no `conf.py`, no HTML. cmake2doc writes the source file; what renders
-it is the project's business.

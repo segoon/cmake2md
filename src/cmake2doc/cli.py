@@ -97,7 +97,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             'Write into an existing --output file, between its '
-            f'{rendering.INJECT_BEGIN} and {rendering.INJECT_END} lines, '
+            f'{rendering.MARKDOWN_MARKERS.begin} and '
+            f'{rendering.MARKDOWN_MARKERS.end} lines (or, for a .rst output, '
+            f'{rendering.RST_MARKERS.begin} and {rendering.RST_MARKERS.end}), '
             'instead of replacing the whole file. --no-inject wins over '
             'inject = true in the config file.'
         ),
@@ -299,6 +301,7 @@ def run(raw_args: argparse.Namespace, cwd: pathlib.Path) -> int:
     symbols: list[parse.Symbol] = []
     commands: list[parse.Command] = []
     variables: list[parse.Variable] = []
+    targets: list[parse.Target] = []
     blocks: list[parse.Block] = []
     exclude = args.exclude + sources.read_ignore_file(root)
     for path in sources.collect_sources(args.path, exclude):
@@ -306,12 +309,15 @@ def run(raw_args: argparse.Namespace, cwd: pathlib.Path) -> int:
         symbols += parse.extract_symbols(file)
         commands += parse.extract_commands(file)
         variables += parse.extract_variables(file)
+        targets += parse.extract_targets(file)
         blocks += parse.extract_blocks(file)
     pipeline.warn_duplicate_symbols(symbols)
 
     # Shared across every enrich() call below: an option()/set(... CACHE ...)
-    # is read once as a Command and once as the Variable it also is, over the
-    # same comment, and this is what keeps its diagnostics from printing twice.
+    # or an add_library()/add_executable()/add_test()/add_custom_target() is
+    # read once as a Command and once as the Variable/Target it also is, over
+    # the same comment, and this is what keeps its diagnostics from printing
+    # twice.
     reported: set[pipeline.ReportKey] = set()
 
     # Groups first: what they define is what an @ingroup elsewhere is checked
@@ -335,11 +341,14 @@ def run(raw_args: argparse.Namespace, cwd: pathlib.Path) -> int:
 
     context = entries.Context(
         symbols=enriched_symbols,
-        # Variables first, so a warning about an option()/set(... CACHE ...)
-        # is reported under its own name rather than the generic 'command'.
+        # Variables and targets first, so a warning about an
+        # option()/set(... CACHE ...) or an add_library()/add_executable()/
+        # add_test()/add_custom_target() is reported under its own name
+        # rather than the generic 'command'.
         variables=[
             pipeline.enrich_variable(v, rules, known, reported) for v in variables
         ],
+        targets=[pipeline.enrich_target(t, rules, known, reported) for t in targets],
         commands=[pipeline.enrich_command(c, rules, known, reported) for c in commands],
         groups=groups,
         files=[b for b in documented_blocks if b.doc.documents_file],

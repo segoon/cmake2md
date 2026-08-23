@@ -60,3 +60,8 @@ def symbols_of(parsed):
 @pytest.fixture
 def variables_of(parsed):
     return lambda source: parse.extract_variables(parsed(source))
+
+
+@pytest.fixture
+def targets_of(parsed):
+    return lambda source: parse.extract_targets(parsed(source))

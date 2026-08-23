@@ -45,8 +45,8 @@ parsed model of the file and gets out of the way.
 
 * Doxygen-like `@`-tags for arguments, options, params and more, extracted
   from comments above `function()`, `macro()` and command calls.
-* Output driven entirely by your own Jinja templates, with three built-in ones
-  to start from — Markdown or reStructuredText for Sphinx, out of the box.
+* Custom Jinja templates, with three built-in ones to start from —
+  Markdown or reStructuredText for Sphinx, out of the box.
 * A checking pass that compares the doc comment against what the CMake code
   actually accepts — and against `@example` blocks, which are parsed as
   CMake — catching drift a plain doc generator can't.
@@ -282,6 +282,17 @@ Each `CMAKE_FILE` is a file, a directory to search for `CMakeLists.txt` and
 directories and patterns itself, so it behaves the same in shells that do not,
 such as those on Windows.
 
+cmake2doc does not follow `include()` or `add_subdirectory()` to find more
+sources — it only reads what `CMAKE_FILE` itself resolves to. This is usually
+invisible: pointing it at a project's root directory already reaches every
+subdirectory a normal `add_subdirectory()` tree does, since the search above
+is a plain walk of the filesystem, not of the build. It matters only when a
+directory is reached solely through an `include()` or `add_subdirectory()`
+that leads *outside* the given root — a sibling `cmake/` module directory, or
+a dependency pulled in with `FetchContent`, say. List that directory
+explicitly as another `CMAKE_FILE` (or add it to `path` in
+`cmake2doc.toml`); cmake2doc will not find it on its own.
+
 `--check` is meant for CI, to verify that generated documentation was
 regenerated after a change to the CMake sources; it prints a diff of what
 differs, since nobody in CI can re-run the generator to find out.
@@ -347,6 +358,20 @@ than in one of its own. Mark the place once:
 and everything between the markers is replaced on each run, leaving the prose
 around them alone. It composes with `--check`.
 
+The marker syntax depends on `--output`'s own extension, so it reads as a
+comment in the file it is written into: an `.rst` output gets a
+reStructuredText comment, since docutils does not hide an HTML comment the
+way a Markdown renderer does; anything else, including `.md`, gets the HTML
+comment above.
+
+```rst
+My project
+==========
+
+.. BEGIN_CMAKE2MD
+.. END_CMAKE2MD
+```
+
 ### From CMake
 
 `cmake/cmake2doc.cmake` adds targets that run cmake2doc as part of the build, so
@@ -402,11 +427,14 @@ A GitHub Action:
 
 ### Writing templates
 
-Templates receive five lists:
+Templates receive six lists:
 
 - `symbols` — every `function()` and `macro()`, documented or not
 - `variables` — every cache entry a user can set: `option()` and
   `set(... CACHE ...)`, parsed
+- `targets` — every `add_library()`, `add_executable()`, `add_test()` and
+  `add_custom_target()` call, with its own name and kind, so a template
+  wanting a table of them does not have to parse `args` itself
 - `commands` — every command call (`option()`, `set()`, …), including calls
   nested in a `function()` body or an `if()` block
 - `groups` — every `@defgroup`, in the order they were defined, each with a
@@ -429,8 +457,9 @@ Each entry is a dict with:
 | `comments_line` | Line the comment block starts on, or `0` when there is none. |
 | `type_` | Symbols: `'function'` or `'macro'`. Variables: the cache type, `BOOL`, `PATH`, `FILEPATH`, `STRING` or `INTERNAL`. |
 | `signature` | Symbols only: what the code itself accepts, as `signature.accepts.arg`, `.option`, `.param`, `.multiparam` and `.return`. Each is a list of names, or `None` where the code does not say. |
-| `args` | Commands only: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
-| `command` | Variables only: `'option'` or `'set'`. |
+| `args` | Commands and targets: the raw argument list, e.g. `['FOO', '"desc"', 'ON']`. |
+| `command` | Variables: `'option'` or `'set'`. Targets: `'add_library'`, `'add_executable'`, `'add_test'` or `'add_custom_target'`. |
+| `kind` | Targets only: `'library'`, `'executable'`, `'test'` or `'custom target'`, derived from `command`. |
 | `default` | Variables only: the value the entry holds unless the user overrides it. |
 | `docstring` | Variables only: the help string the command itself gives, which is what `cmake-gui` shows. |
 | `choices` | Variables only: the values `set_property(CACHE … PROPERTY STRINGS …)` restricts the entry to, or `None`. |
@@ -488,6 +517,12 @@ same thing in a different order, so `variables` gives both of them one shape:
 A `set()` that writes no cache entry is a local variable rather than something
 to configure, so it is not in the list; it is still in `commands`. A
 `set_property(CACHE … PROPERTY STRINGS …)` in the same file fills `choices`.
+
+The same is true of `targets`: an `add_library()` call is also in `commands`,
+promoted rather than removed, exactly as `option()`/`set(... CACHE ...)` are
+promoted into `variables`. `add_custom_command()` is not promoted — it names
+no target of its own, only an `OUTPUT` file or an existing `TARGET` — so it
+stays a plain command.
 
 #### Filters
 
@@ -575,7 +610,7 @@ your own devising would have nowhere to be written.
 {
   "schema_version": 1,
   "symbols": [{"name": "example_add_library", "doc": {"brief": "…"}}],
-  "variables": [], "commands": [], "groups": [], "files": []
+  "variables": [], "targets": [], "commands": [], "groups": [], "files": []
 }
 ```
 
@@ -589,10 +624,7 @@ together, and how to add a tag.
 
 ## Prior art
 
-cmake2doc is a Markdown generator for CMake with a checking pass, which is a
-gap between two neighbourhoods rather than new ground:
-
-| | |
+| Tool | How it compares |
 |---|---|
 | [Doxygen](https://www.doxygen.nl/) | Where the `@tag` vocabulary comes from, down to a paragraph tag ending at a blank line. It has no CMake parser. |
 | [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2doc does, and targets a Sphinx site: reStructuredText is what it emits, and the docstrings are written in it. cmake2doc renders through templates, so it emits either — but a project already built with Sphinx will find CMinx the closer fit. |
@@ -600,10 +632,8 @@ gap between two neighbourhoods rather than new ground:
 | [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
 | [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |
 | [shdoc](https://github.com/reconquest/shdoc) | The same shape of problem for shell: a dynamic language whose interface is only stated in comments. |
-
-Where cmake2doc differs from all of them is the checking pass: the doc comment
-is compared against what the CMake code actually accepts, and the two are
-reported when they disagree.
+| [godoc](https://pkg.go.dev/golang.org/x/tools/cmd/godoc) | No `@tag` vocabulary at all — a doc comment is just the prose directly above a declaration, taken as-is. It relies on the language having no equivalent of `cmake_parse_arguments()` to drift from; CMake's own argument parsing is exactly what a doc comment can fall out of sync with, which is why cmake2doc checks it. |
+| [JSDoc](https://jsdoc.app/), [TypeDoc](https://typedoc.org/) | `@param`-style tags close to cmake2doc's own, and TypeScript's type system catches a caller passing the wrong type. Neither checks that a documented parameter is one the function actually accepts, which is the gap cmake2doc's checking pass closes for CMake's own untyped, string-based argument parsing. |
 
 ## License
 

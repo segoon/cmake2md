@@ -194,6 +194,18 @@ def test_an_option_warning_is_reported_once_not_twice(template, tmp_path, capsys
     assert ': option FOO: warning:' in err
 
 
+def test_a_target_warning_is_reported_once_not_twice(template, tmp_path, capsys):
+    # add_library() is read once as a Command and once as the Target it also
+    # is, over the same comment; a warning about it must not print for both.
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text('# @nosuchtag\nadd_library(core a.cpp)\n', encoding='utf-8')
+    assert run('--no-strict', '-t', template, '-o', tmp_path / 'out.md', source) == 0
+    err = capsys.readouterr().err
+    assert err.count('unknown tag @nosuchtag') == 1
+    # Reported under the Target's own name, not the generic 'command'.
+    assert ': library core: warning:' in err
+
+
 def test_error_message_points_at_the_symbol(template, tmp_path, capsys):
     source = tmp_path / 'CMakeLists.txt'
     source.write_text('# @param\nfunction(broken)\nendfunction()\n', encoding='utf-8')
@@ -706,6 +718,32 @@ def test_json_dump_carries_the_model_and_a_schema_version(cmake_file, tmp_path):
         'EXAMPLE_STATIC',
         'EXAMPLE_DIR',
     ]
+    # cmake_file defines no add_library()/add_executable()/add_test()/
+    # add_custom_target(), but the key is always present.
+    assert data['targets'] == []
+
+
+def test_json_dump_carries_targets(tmp_path):
+    import json
+
+    source = tmp_path / 'CMakeLists.txt'
+    source.write_text(
+        '# @brief The core library.\n'
+        'add_library(core a.cpp)\n'
+        'add_test(NAME unit_tests COMMAND unit_runner)\n',
+        encoding='utf-8',
+    )
+    out = tmp_path / 'model.json'
+    assert run('--json', out, source) == 0
+
+    targets = json.loads(out.read_text(encoding='utf-8'))['targets']
+    # `kind` is a derived property, not a dataclass field, so the JSON dump
+    # (a plain dataclasses.asdict()) carries `command` instead.
+    assert [(t['name'], t['command']) for t in targets] == [
+        ('core', 'add_library'),
+        ('unit_tests', 'add_test'),
+    ]
+    assert targets[0]['doc']['brief'] == 'The core library.'
 
 
 def test_json_alone_needs_no_template(cmake_file, tmp_path):
@@ -885,6 +923,54 @@ def test_inject_without_markers_says_what_is_missing(
 def test_inject_needs_the_file_to_exist(cmake_file, template, tmp_path, capsys):
     assert run('--inject', '-t', template, '-o', tmp_path / 'nope.md', cmake_file) == 1
     assert '--inject needs' in capsys.readouterr().err
+
+
+INJECTABLE_RST = """\
+My project
+==========
+
+Prose the author wrote.
+
+.. BEGIN_CMAKE2MD
+what was generated last time
+.. END_CMAKE2MD
+
+Prose after it.
+"""
+
+
+def test_inject_into_rst_uses_rst_comment_markers(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE_RST, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 0
+
+    text = out.read_text(encoding='utf-8')
+    assert text.startswith('My project\n==========\n\nProse the author wrote.\n')
+    assert text.endswith('Prose after it.\n')
+    assert '## example_add_library' in text
+    assert 'what was generated last time' not in text
+
+
+def test_inject_into_rst_is_idempotent(cmake_file, template, tmp_path):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE_RST, encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    once = out.read_text(encoding='utf-8')
+    run('--inject', '-t', template, '-o', out, cmake_file)
+    assert out.read_text(encoding='utf-8') == once
+    assert run('--check', '--inject', '-t', template, '-o', out, cmake_file) == 0
+
+
+def test_inject_into_rst_rejects_html_comment_markers(
+    cmake_file, template, tmp_path, capsys
+):
+    out = tmp_path / 'README.rst'
+    out.write_text(INJECTABLE, encoding='utf-8')
+    assert run('--inject', '-t', template, '-o', out, cmake_file) == 1
+    err = capsys.readouterr().err
+    assert 'no place to inject into' in err
+    assert '.. BEGIN_CMAKE2MD' in err
+    assert '.. END_CMAKE2MD' in err
 
 
 def test_builtin_reference_template_documents_a_whole_project(cmake_file, tmp_path):

@@ -30,3 +30,20 @@ Note that `symbol.pretty` is Markdown, always: it is rendered by
 `function.md.jinja`. A template that emits anything else has to lay symbols
 out from `doc.args`, `doc.params` and the rest itself, as the built-in
 reStructuredText template does.
+
+`--inject` works into an `.rst` file too, such as a hand-written page in a
+Sphinx source tree. Since a Markdown-style `<!-- HTML comment -->` is not
+hidden by docutils, an `.rst` output looks for an rST comment instead — a
+`.. ` line that matches no directive:
+
+```rst
+.. BEGIN_CMAKE2MD
+.. END_CMAKE2MD
+```
+
+```shell
+cmake2doc --inject \
+    --template reference.rst.jinja \
+    --output docs/reference.rst \
+    examples/rest/CMakeLists.txt
+```

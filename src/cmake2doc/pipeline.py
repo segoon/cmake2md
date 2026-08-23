@@ -160,6 +160,21 @@ def enrich_variable(
     )
 
 
+def enrich_target(
+    item: parse.Target,
+    rules: DocRules,
+    groups: frozenset[str] = frozenset(),
+    reported: set[ReportKey] | None = None,
+    *,
+    check_now: bool = True,
+) -> entries.EnrichedTarget:
+    """Attach the parsed doc comment to `item`."""
+    doc = _attach_doc(item, rules, groups, reported, check_now)
+    return entries.EnrichedTarget(
+        **vars(item), doc=doc, group=doc.group, pretty=doc.description
+    )
+
+
 def enrich_block(
     item: parse.Block,
     rules: DocRules,
