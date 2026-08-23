@@ -106,12 +106,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--inject',
-        action='store_true',
+        action=argparse.BooleanOptionalAction,
         default=None,
         help=(
             'Write into an existing --output file, between its '
             f'{rendering.INJECT_BEGIN} and {rendering.INJECT_END} lines, '
-            'instead of replacing the whole file.'
+            'instead of replacing the whole file. --no-inject wins over '
+            'inject = true in the config file.'
         ),
     )
     parser.add_argument(
@@ -134,12 +135,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--require-docs',
-        action='store_true',
+        action=argparse.BooleanOptionalAction,
         default=None,
         help=(
             'Exit non-zero if a public function() or macro() carries no doc '
             'comment. A name starting with _ is private and is not required '
-            'to have one.'
+            'to have one. --no-require-docs wins over require-docs = true in '
+            'the config file.'
         ),
     )
     parser.add_argument(
@@ -154,11 +156,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--check',
-        action='store_true',
+        action=argparse.BooleanOptionalAction,
         default=None,
         help=(
             'Do not write anything; exit non-zero if any output is missing '
-            'or differs from what is already on disk.'
+            'or differs from what is already on disk. --no-check wins over '
+            'check = true in the config file.'
         ),
     )
     parser.add_argument(

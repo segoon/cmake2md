@@ -1081,6 +1081,17 @@ def test_the_config_file_can_turn_strict_off(
     assert 'warning: unknown tag @nosuchtag' in capsys.readouterr().err
 
 
+def test_no_check_on_the_command_line_beats_the_config_file(
+    cmake_file, tmp_path, monkeypatch
+):
+    # check = true in the config file must not be the only way to write the
+    # output; --no-check is how a run overrides it for once.
+    monkeypatch.chdir(tmp_path)
+    write_config(tmp_path, 'check = true\n')
+    assert run('--no-check') == 0
+    assert (tmp_path / 'out.md').exists()
+
+
 DOCUMENTED_WITH_A_CUSTOM_TAG = """\
 # @brief Adds a thing.
 #

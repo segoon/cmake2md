@@ -32,6 +32,10 @@
 - An unwritable output directory or an unreadable `.cmake2mdignore` is
   reported as a sentence naming the file, like every other I/O problem
   already was, instead of a Python traceback.
+- `--check`, `--inject` and `--require-docs` accept `--no-check`,
+  `--no-inject` and `--no-require-docs`, like `--strict` already accepted
+  `--no-strict`, so a project that records one of them as `true` in
+  `cmake2md.toml` can still turn it off for one run.
 
 ### Added
 
