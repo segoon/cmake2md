@@ -624,10 +624,7 @@ together, and how to add a tag.
 
 ## Prior art
 
-cmake2doc is a Markdown generator for CMake with a checking pass, which is a
-gap between two neighbourhoods rather than new ground:
-
-| | |
+| Tool | How it compares |
 |---|---|
 | [Doxygen](https://www.doxygen.nl/) | Where the `@tag` vocabulary comes from, down to a paragraph tag ending at a blank line. It has no CMake parser. |
 | [CMinx](https://github.com/CMakePP/CMinx) | The other CMake documentation generator. It derives signatures from the grammar as cmake2doc does, and targets a Sphinx site: reStructuredText is what it emits, and the docstrings are written in it. cmake2doc renders through templates, so it emits either — but a project already built with Sphinx will find CMinx the closer fit. |
@@ -635,6 +632,8 @@ gap between two neighbourhoods rather than new ground:
 | [terraform-docs](https://terraform-docs.io/), [helm-docs](https://github.com/norwoodj/helm-docs) | The same problem for another declarative language: a typed table of inputs, injection into an existing README, a config file, a pre-commit hook. |
 | [rustdoc](https://doc.rust-lang.org/rustdoc/) | Doc examples that are checked rather than trusted, and `missing_docs` — here `@example` and `--require-docs`. |
 | [shdoc](https://github.com/reconquest/shdoc) | The same shape of problem for shell: a dynamic language whose interface is only stated in comments. |
+| [godoc](https://pkg.go.dev/golang.org/x/tools/cmd/godoc) | No `@tag` vocabulary at all — a doc comment is just the prose directly above a declaration, taken as-is. It relies on the language having no equivalent of `cmake_parse_arguments()` to drift from; CMake's own argument parsing is exactly what a doc comment can fall out of sync with, which is why cmake2doc checks it. |
+| [JSDoc](https://jsdoc.app/), [TypeDoc](https://typedoc.org/) | `@param`-style tags close to cmake2doc's own, and TypeScript's type system catches a caller passing the wrong type. Neither checks that a documented parameter is one the function actually accepts, which is the gap cmake2doc's checking pass closes for CMake's own untyped, string-based argument parsing. |
 
 ## License
 
