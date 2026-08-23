@@ -6,9 +6,9 @@ and uses jinja templates to generate final documentation.
 
 # Core documentation
 
-- @VISION.md - the core product vision, read it first.
-- @README.md - the main user documentation.
-- @TODO.md - the plans.
+* @VISION.md - the core product vision, read it first.
+* @README.md - the main user documentation.
+* @TODO.md - the plans.
 
 # Development
 
@@ -42,7 +42,7 @@ Python 3.10, mypy, ruff, pyproject.toml.
 * When fixing a bug, search for similar bugs in the nearby code.
 * When found a bug, elaborate whether it is possible to redesign the system to make such bugs impossible
 
-- DRY, KISS, SOLID.
+* DRY, KISS, SOLID.
 * Prefer SRP, avoid god objects.
 * Use OOP where appropriate.
 
