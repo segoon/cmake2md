@@ -14,6 +14,7 @@ parsed model of the file and gets out of the way.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of contents**
 
+- [Major features](#major-features)
 - [Getting started](#getting-started)
   - [System requirements](#system-requirements)
   - [Installation](#installation)
