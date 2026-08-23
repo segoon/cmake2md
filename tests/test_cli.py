@@ -391,6 +391,22 @@ def test_output_dash_is_rejected_with_check(cmake_file, template, capsys):
     assert 'writes nothing to check' in capsys.readouterr().err
 
 
+def test_output_dash_from_the_config_file_writes_to_stdout(
+    cmake_file, tmp_path, monkeypatch, capsys
+):
+    # A path setting is resolved against the config file's own directory,
+    # but '-' means stdout and is not a path at all; resolving it the same
+    # way would create a file literally called '-'.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / config.DEFAULT_FILE).write_text(
+        'template = "function.md.jinja"\noutput = "-"\npath = "."\n',
+        encoding='utf-8',
+    )
+    assert run() == 0
+    assert '## example_add_library' in capsys.readouterr().out
+    assert not (tmp_path / '-').exists()
+
+
 def test_directory_is_searched_for_cmake_sources(template, tmp_path):
     (tmp_path / 'sub').mkdir()
     (tmp_path / 'CMakeLists.txt').write_text(

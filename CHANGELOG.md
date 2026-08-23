@@ -9,6 +9,9 @@
   a tag left with nothing after it but a newline reports the existing
   "requires a name" error instead of silently taking the next line's first
   word as its name.
+- `output = "-"` and `json = "-"` in `cmake2md.toml`, which mean "write to
+  stdout", are no longer resolved against the config file's directory into a
+  file literally called `-`.
 
 ### Added
 

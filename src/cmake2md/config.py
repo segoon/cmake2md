@@ -25,6 +25,10 @@ from . import doc_parser
 from . import tag_lexer
 from .errors import UsageError
 
+#: The --output/--json value that means "write to stdout" instead of to a
+#: file.  Defined here, and re-exported by `cli`, so that a path setting
+#: resolved against the config file (`_against`) knows to leave it alone.
+STDOUT = '-'
 #: The file the settings live in, looked for from the working directory up.
 DEFAULT_FILE = 'cmake2md.toml'
 #: What stops that search: past a repository, the file would not be this
@@ -141,10 +145,14 @@ def _against(root: pathlib.Path, value: Any, only_if_file: bool = False) -> Any:
 
     Anything else would depend on where cmake2md happened to be run from,
     which is exactly what a config file at the project root is there to stop
-    mattering.
+    mattering.  `STDOUT` is not a path at all, and must be left alone:
+    resolving it against a directory would create a file called `-` instead
+    of writing to standard output.
     """
     if isinstance(value, list):
         return [_against(root, item, only_if_file) for item in value]
+    if value == STDOUT:
+        return value
     resolved = root / value
     if only_if_file and not resolved.is_file():
         return value

@@ -25,8 +25,10 @@ from .errors import Cmake2mdError
 from .errors import ParseError
 from .errors import UsageError
 
-#: The --output value that means "write to stdout" instead of to a file.
-STDOUT = '-'
+#: The --output/--json value that means "write to stdout" instead of to a
+#: file.  Defined in `config`, so that resolving a path setting against the
+#: config file (`config._against`) knows to leave it alone.
+STDOUT = config.STDOUT
 #: What a directory given as CMAKE_FILE is searched for.
 SOURCE_GLOBS = ('CMakeLists.txt', '*.cmake')
 #: File listing extra --exclude patterns, one per line, '#' starting a comment.
