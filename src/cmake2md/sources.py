@@ -25,11 +25,12 @@ def read_ignore_file(directory: pathlib.Path) -> list[str]:
     path = directory / IGNORE_FILE
     if not path.is_file():
         return []
-    return [
-        line.strip()
-        for line in _read_text(path).splitlines()
-        if line.strip() and not line.lstrip().startswith('#')
-    ]
+    patterns = []
+    for raw in _read_text(path).splitlines():
+        line = raw.strip()
+        if line and not line.startswith('#'):
+            patterns.append(line)
+    return patterns
 
 
 def is_excluded(path: pathlib.Path, patterns: Sequence[str]) -> bool:
@@ -39,10 +40,10 @@ def is_excluded(path: pathlib.Path, patterns: Sequence[str]) -> bool:
     ways to say what to leave out.
     """
     text = path.as_posix()
-    return any(
-        fnmatch.fnmatch(text, pattern) or fnmatch.fnmatch(path.name, pattern)
-        for pattern in patterns
-    )
+    for pattern in patterns:
+        if fnmatch.fnmatch(text, pattern) or fnmatch.fnmatch(path.name, pattern):
+            return True
+    return False
 
 
 def collect_sources(
@@ -59,28 +60,20 @@ def collect_sources(
     again would document every symbol in it twice over.
     """
     found: list[pathlib.Path] = []
-    seen: set[pathlib.Path] = set()
     for path in paths:
         candidate = pathlib.Path(path)
         if candidate.is_dir():
-            matches = sorted(
+            matches = [
                 match
                 for pattern in SOURCE_GLOBS
                 for match in candidate.rglob(pattern)
                 if not any(part.startswith('.') for part in match.parts)
-            )
+            ]
         elif candidate.exists():
             matches = [candidate]
         else:
-            matches = sorted(pathlib.Path(m) for m in glob.glob(path, recursive=True))
+            matches = [pathlib.Path(m) for m in glob.glob(path, recursive=True)]
         if not matches:
             raise UsageError(f'no CMake sources found at {path}')
-        for match in matches:
-            if is_excluded(match, exclude):
-                continue
-            resolved = match.resolve()
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            found.append(match)
-    return found
+        found += [match for match in matches if not is_excluded(match, exclude)]
+    return sorted(set(found))
