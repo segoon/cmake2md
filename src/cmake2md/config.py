@@ -8,8 +8,9 @@ The settings are the whole file: it is cmake2md's own, so it needs no table
 to say whose settings these are.  A relative path in it is relative to the
 file, which is the only reading that survives being run from a subdirectory.
 
-`Settings` is the single declaration of what the file may hold: the settings,
-their types, and what each is worth when unsaid.  `cli` reads its defaults
+`_RawSettings` is the single declaration of what the file may hold: the
+settings, their types, and what each is worth when unsaid.  `Settings` is
+the resolved view over it that `cli` actually uses, and reads its defaults
 from the same place, so the two cannot drift apart.
 """
 
@@ -39,25 +40,9 @@ ROOT_MARKERS = ('.git',)
 #: comment to be stored, so those stay built-in.
 TAG_TEXTS = (doc_parser.TagText.Paragraph, doc_parser.TagText.Block)
 
-#: The one setting whose field cannot be named after it: see `Settings.json_`.
+#: The one setting whose field cannot be named after it: see `_RawSettings.json_`.
 JSON_FIELD = 'json_'
 JSON_SETTING = 'json'
-
-
-@dataclasses.dataclass(frozen=True)
-class AgainstConfigFile:
-    """Marks a setting whose value names a file, and so is read relative to it.
-
-    Carried as field metadata rather than in a table of its own, so that a
-    setting says everything about itself in one place.  `only_if_file` is what
-    tells a template path from the name of a built-in: by whether the file is
-    there, the way `rendering.resolve_template_spec` tells them apart.
-    """
-
-    only_if_file: bool = False
-    #: Whether the setting holds a StrList rather than a single path, so
-    #: `load()` knows to resolve every item without inspecting the value.
-    is_list: bool = False
 
 
 def _check_tag_name(name: str) -> str:
@@ -89,7 +74,7 @@ def _dashed(name: str) -> str:
 class TagSettings(pydantic.BaseModel):
     """What a tag of the project's own may say about itself."""
 
-    # No dashed aliases here, unlike `Settings`: a tag's settings are not
+    # No dashed aliases here, unlike `_RawSettings`: a tag's settings are not
     # command-line options, and are documented as written.
     model_config = pydantic.ConfigDict(extra='forbid')
 
@@ -119,8 +104,8 @@ class TagSettings(pydantic.BaseModel):
         )
 
 
-class Settings(pydantic.BaseModel):
-    """The settings the file may carry, and what each is worth when unsaid.
+class _RawSettings(pydantic.BaseModel):
+    """What cmake2md.toml literally says, before any path in it is resolved.
 
     Anything else in it is a mistake worth pointing out rather than ignoring,
     which is what `extra='forbid'` says.  Every setting is also a long option,
@@ -132,21 +117,17 @@ class Settings(pydantic.BaseModel):
         extra='forbid', alias_generator=_dashed, populate_by_name=True
     )
 
-    template: Annotated[
-        StrList, AgainstConfigFile(only_if_file=True, is_list=True)
-    ] = []
-    output: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
-    template_dir: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
-    path: Annotated[StrList, AgainstConfigFile(is_list=True)] = []
+    template: StrList = []
+    output: StrList = []
+    template_dir: StrList = []
+    path: StrList = []
     #: Not a path but a glob matched against one, so it is left as written.
     exclude: StrList = []
     #: Trailing underscore because a field called `json` shadows a method of
     #: pydantic's own base class, which it warns about; `JSON_SETTING` puts
     #: the name back before anything outside this module sees it.
     json_: Annotated[
-        pydantic.StrictStr | None,
-        AgainstConfigFile(),
-        pydantic.Field(validation_alias='json'),
+        pydantic.StrictStr | None, pydantic.Field(validation_alias='json')
     ] = None
     inject: pydantic.StrictBool = False
     check: pydantic.StrictBool = False
@@ -154,22 +135,79 @@ class Settings(pydantic.BaseModel):
     strict: pydantic.StrictBool = True
     tags: dict[TagName, TagSettings] = {}
 
-    def as_arguments(self, *, only_set: bool = False) -> dict[str, Any]:
-        """The settings under the names the command line knows them by.
 
-        `only_set` leaves out everything the file did not name: `cli` tells an
-        unsaid setting from one turned off on purpose by whether it is there
-        at all, so a default filled in here would beat an explicit
-        --no-strict.
+@dataclasses.dataclass(frozen=True)
+class Settings:
+    """A cmake2md.toml file's settings, with every path in it resolved
+    against the file's own directory — the only reading that survives being
+    run from a subdirectory.  Built once, by `resolve()`, from a
+    `_RawSettings` — which is only what pydantic validated, paths exactly as
+    the file wrote them — and holds no reference back to it.
+    """
+
+    template: list[str]
+    output: list[str]
+    template_dir: list[str]
+    path: list[str]
+    exclude: list[str]
+    json: str | None
+    inject: bool
+    check: bool
+    require_docs: bool
+    strict: bool
+    tags: dict[str, doc_parser.TagSpec]
+
+    @classmethod
+    def defaults(cls) -> 'Settings':
+        """cmake2md's own defaults: nothing read from a file, so nothing to
+        resolve — `root` is never touched, since every default is empty or
+        None.
         """
-        dumped = self.model_dump(exclude_unset=only_set)
-        if JSON_FIELD in dumped:
-            dumped[JSON_SETTING] = dumped.pop(JSON_FIELD)
-        if 'tags' in dumped:
-            dumped['tags'] = {
-                name: tag.to_spec(name) for name, tag in self.tags.items()
-            }
-        return dumped
+        return cls.resolve(_RawSettings(), root=pathlib.Path())
+
+    @classmethod
+    def resolve(cls, raw: _RawSettings, root: pathlib.Path) -> 'Settings':
+        """Read `raw` the way `root`, the config file's own directory, makes
+        every path in it read the same regardless of where cmake2md was run
+        from.
+        """
+        return cls(
+            # only_if_file=True: a spec that isn't an existing file names a
+            # built-in template, and must be left as written.
+            template=[_against(root, item, only_if_file=True) for item in raw.template],
+            output=[_against(root, item) for item in raw.output],
+            template_dir=[_against(root, item) for item in raw.template_dir],
+            path=[_against(root, item) for item in raw.path],
+            exclude=raw.exclude,
+            # A plain dataclass, not a BaseModel, so `json` needs no alias trick.
+            json=None if raw.json_ is None else _against(root, raw.json_),
+            inject=raw.inject,
+            check=raw.check,
+            require_docs=raw.require_docs,
+            strict=raw.strict,
+            tags={name: tag.to_spec(name) for name, tag in raw.tags.items()},
+        )
+
+    def as_arguments(self) -> dict[str, Any]:
+        """This settings' values under the names argparse holds them by.
+
+        Those are the field names above, underscored throughout: argparse's
+        `dest` for e.g. `--template-dir` is `template_dir`, not the dashed
+        flag spelling.
+        """
+        return {
+            'template': self.template,
+            'output': self.output,
+            'template_dir': self.template_dir,
+            'path': self.path,
+            'exclude': self.exclude,
+            'json': self.json,
+            'inject': self.inject,
+            'check': self.check,
+            'require_docs': self.require_docs,
+            'strict': self.strict,
+            'tags': self.tags,
+        }
 
 
 def find(start: pathlib.Path) -> pathlib.Path | None:
@@ -200,34 +238,22 @@ def load(path: pathlib.Path) -> dict[str, Any]:
     project may keep one for the sake of the tags alone.
     """
     try:
-        data = tomli.loads(path.read_text(encoding='utf-8'))
+        data: dict[str, object] = tomli.loads(path.read_text(encoding='utf-8'))
     except OSError as exc:
         raise UsageError(f'cannot read {path}: {exc.strerror}') from exc
     except tomli.TOMLDecodeError as exc:
         raise UsageError(f'{path} is not valid TOML: {exc}') from exc
 
     try:
-        parsed = Settings.model_validate(data)
+        raw = _RawSettings.model_validate(data)
     except pydantic.ValidationError as exc:
         raise UsageError(_prose(path, exc, data)) from None
 
-    settings = parsed.as_arguments(only_set=True)
-    root = path.parent
-    for name, value in settings.items():
-        field = Settings.model_fields[_field_of(name)]
-        for mark in field.metadata:
-            if isinstance(mark, AgainstConfigFile):
-                settings[name] = (
-                    [_against(root, item, mark.only_if_file) for item in value]
-                    if mark.is_list
-                    else _against(root, value, mark.only_if_file)
-                )
-    return settings
-
-
-def _field_of(setting: str) -> str:
-    """The field holding `setting`, which is its own name but for `json`."""
-    return JSON_FIELD if setting == JSON_SETTING else setting
+    settings = Settings.resolve(raw, root=path.parent).as_arguments()
+    written = {
+        JSON_SETTING if field == JSON_FIELD else field for field in raw.model_fields_set
+    }
+    return {name: value for name, value in settings.items() if name in written}
 
 
 def _setting_of(field: str) -> str:
@@ -235,7 +261,7 @@ def _setting_of(field: str) -> str:
     return _dashed(JSON_SETTING if field == JSON_FIELD else field)
 
 
-def _as_written(name: str, data: dict[str, Any]) -> str:
+def _as_written(name: str, data: dict[str, object]) -> str:
     """`name` spelled as the file spells it.
 
     A setting may be written with either dashes or underscores, and pydantic
@@ -266,7 +292,7 @@ _WRONG_TYPE = {
 
 
 def _prose(
-    path: pathlib.Path, exc: pydantic.ValidationError, data: dict[str, Any]
+    path: pathlib.Path, exc: pydantic.ValidationError, data: dict[str, object]
 ) -> str:
     """The first thing wrong with the file, said the way cmake2md says things.
 
@@ -293,7 +319,9 @@ def _prose(
             return (
                 f'{where} {owner} has no setting called {loc[-1]}; a tag takes: {known}'
             )
-        known = ', '.join(sorted(_setting_of(name) for name in Settings.model_fields))
+        known = ', '.join(
+            sorted(_setting_of(name) for name in _RawSettings.model_fields)
+        )
         return f'{where} has no setting called {loc[-1]}; the settings are: {known}'
 
     # Ours raise ValueError, whose wording is already the final one; pydantic
@@ -314,8 +342,8 @@ def _against(root: pathlib.Path, value: str, only_if_file: bool = False) -> str:
     which is exactly what a config file at the project root is there to stop
     mattering.  `STDOUT` is not a path at all, and must be left alone:
     resolving it against a directory would create a file called `-` instead
-    of writing to standard output.  Called once per item of a StrList
-    setting, and once for a lone one, per `AgainstConfigFile.is_list`.
+    of writing to standard output.  Called once per item of a list setting,
+    and once for a lone one, by `Settings.resolve()`.
     """
     if value == STDOUT:
         return value

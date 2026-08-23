@@ -1249,7 +1249,7 @@ def test_every_config_setting_has_a_default_and_an_option():
     # The model is the one declaration of what the file may say: cli takes its
     # defaults from it, and argparse must know every setting by the same name,
     # or a setting given in the file would be dropped on the floor.
-    settings = config.Settings().as_arguments()
+    settings = config.Settings.defaults().as_arguments()
     known = vars(cli.build_arg_parser().parse_args(['x']))
     # [tags] is the one setting with no option behind it: a vocabulary is a
     # property of the project, not of a single run.

@@ -199,10 +199,11 @@ def apply_defaults(args: argparse.Namespace) -> None:
     """Settle whatever neither the command line nor the config file said.
 
     The defaults are the config model's own, so a setting cannot be given one
-    there and another here.  A fresh `Settings()` each run also means the
-    empty list a run fills in is never the list another run filled in.
+    there and another here.  A fresh `Settings.defaults()` each run also
+    means the empty list a run fills in is never the list another run
+    filled in.
     """
-    for key, value in config.Settings().as_arguments().items():
+    for key, value in config.Settings.defaults().as_arguments().items():
         if vars(args).get(key) is None:
             vars(args)[key] = value
 
