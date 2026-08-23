@@ -394,25 +394,30 @@ when one is added, so a consumer must ignore the fields it does not know.
 
 ## From CMake
 
-`cmake/cmake2md.cmake` adds a target that runs cmake2md as part of the build,
-so a project documents its own CMake code without a separate script to
-remember. Copy it into your module path, or fetch it:
+`cmake/cmake2md.cmake` adds targets that run cmake2md as part of the build, so
+a project documents its own CMake code without a separate script to remember.
+Copy it into your module path, or fetch it:
 
 ```cmake
 include(cmake2md)
 
 cmake2md_generate(
+    # `cmake --build build --target docs` regenerates the documentation.
+    # A second target, `docs-check`, verifies instead that it is up to date
+    # and fails with a diff when it is not, which is what a CI job wants.
     TARGET docs
+    # A path, or the name of a built-in template.
     TEMPLATE reference.md.jinja
+    # Written into the source tree, since it is committed.
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
+    # The CMake files to read; the current source directory when omitted.
     SOURCES cmake/helpers.cmake
+    # Anything else cmake2md takes.
+    EXTRA_ARGS --strict
+    # Build `docs` as part of the default build.
+    ALL
 )
 ```
-
-`cmake --build build --target docs` regenerates the documentation; the target
-is not part of the default build, since documentation that regenerates on
-every build shows up in every diff. `CHECK` verifies it is up to date instead
-of writing it, and `ALL` opts into the default build.
 
 The module is documented with cmake2md's own tags, so it also serves as a
 worked example.

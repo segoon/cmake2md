@@ -866,3 +866,5 @@ def test_the_shipped_cmake_module_documents_itself(tmp_path):
     text = out.read_text(encoding='utf-8')
     assert '## cmake2md_generate' in text
     assert '**TARGET <value>** the name of the target to add' in text
+    # The verifying target is derived from TARGET, not asked for by an option.
+    assert 'CHECK' not in text

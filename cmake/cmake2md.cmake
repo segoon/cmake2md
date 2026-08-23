@@ -25,35 +25,36 @@ worked example.
 # What a CMakeLists.txt needs in order to generate its own documentation.
 
 #[==[.rst:
-@brief Adds a target that generates documentation from CMake sources.
+@brief Adds targets that generate documentation from CMake sources.
 
-The target is not built by default: documentation that regenerates on every
-build is documentation that shows up in every diff. Ask for it by name, or
-pass ALL when that is what you want.
+Two of them: TARGET writes OUTPUT, and `<TARGET>-check` verifies that OUTPUT
+is up to date and fails when it is not, which is what a CI job wants. Both
+say the same thing about the same files, so both come from one call.
+
+Neither is built by default: documentation that regenerates on every build is
+documentation that shows up in every diff. Ask for one by name, or pass ALL.
 
 @ingroup cmake
 
-@param TARGET @required the name of the target to add
+@param TARGET @required the name of the target to add; the verifying target
+    is named after it, with `-check` on the end
 @param TEMPLATE @required the template to render, a path or a built-in name
 @param OUTPUT @required the file to write
 @multiparam SOURCES the CMake files to read; the current source directory
     when none are given
 @multiparam EXTRA_ARGS further arguments for cmake2md, such as --strict
-@option ALL build the target as part of the default build
-@option CHECK verify that OUTPUT is up to date instead of writing it, which
-    is what a CI job wants
+@option ALL build TARGET as part of the default build
 
 @example
 cmake2md_generate(
-    TARGET docs-check
+    TARGET docs
     TEMPLATE reference.md.jinja
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/reference.md
-    CHECK
 )
 #]==]
 function(cmake2md_generate)
     cmake_parse_arguments(
-        ARG "ALL;CHECK" "TARGET;TEMPLATE;OUTPUT" "SOURCES;EXTRA_ARGS" ${ARGN}
+        ARG "ALL" "TARGET;TEMPLATE;OUTPUT" "SOURCES;EXTRA_ARGS" ${ARGN}
     )
 
     foreach(required TARGET TEMPLATE OUTPUT)
@@ -85,9 +86,10 @@ function(cmake2md_generate)
         ${ARG_EXTRA_ARGS}
         ${ARG_SOURCES}
     )
-    if(ARG_CHECK)
-        list(INSERT command 1 --check)
-    endif()
+    # The flag has to land after the executable rather than after the trailing
+    # source paths.
+    set(check_command ${command})
+    list(INSERT check_command 1 --check)
 
     set(all "")
     if(ARG_ALL)
@@ -102,6 +104,15 @@ function(cmake2md_generate)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS ${ARG_SOURCES}
         COMMENT "cmake2md: ${ARG_OUTPUT}"
+        VERBATIM
+    )
+
+    add_custom_target(
+        ${ARG_TARGET}-check
+        COMMAND ${check_command}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        DEPENDS ${ARG_SOURCES}
+        COMMENT "cmake2md: checking ${ARG_OUTPUT}"
         VERBATIM
     )
 endfunction()
