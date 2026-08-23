@@ -138,14 +138,18 @@ def collapse_blank_lines(text: str) -> str:
     return ''.join(out)
 
 
-def resolve_template_spec(spec: str) -> tuple[pathlib.Path | None, str]:
+def resolve_template_spec(
+    spec: str, cwd: pathlib.Path
+) -> tuple[pathlib.Path | None, str]:
     """Split a template argument into a search directory and a template name.
 
     A spec that names an existing file is loaded from its own directory, so
     that ``{% include %}`` next to it keeps working.  Anything else is looked
     up by name in the search path and, finally, among the built-in templates.
+    `cwd` is where a relative `spec` is read from; it has no effect on an
+    absolute one, since `/` on an absolute right-hand side discards the left.
     """
-    path = pathlib.Path(spec)
+    path = cwd / spec
     if path.is_file():
         return path.parent, path.name
     return None, spec

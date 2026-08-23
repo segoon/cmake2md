@@ -187,7 +187,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_config(args: argparse.Namespace) -> pathlib.Path | None:
+def apply_config(args: argparse.Namespace, cwd: pathlib.Path) -> pathlib.Path | None:
     """Fill in from the config file whatever the command line left unsaid.
 
     The command line wins, always: a config file is where a project records
@@ -195,7 +195,7 @@ def apply_config(args: argparse.Namespace) -> pathlib.Path | None:
     for.  Returns the file it read, or None when there was none.
     """
     if args.config is None:
-        path = config.find(pathlib.Path.cwd())
+        path = config.find(cwd)
         if path is None:
             return None
     else:
@@ -566,25 +566,25 @@ def list_templates() -> int:
     return 0
 
 
-def run(args: argparse.Namespace) -> int:
+def run(args: argparse.Namespace, cwd: pathlib.Path) -> int:
     if args.list_templates:
         return list_templates()
 
-    config_path = apply_config(args)
+    config_path = apply_config(args, cwd)
     apply_defaults(args)
     pairs = validate_args(args, config_path)
 
     # The project root: where the config file was found, and so what the
     # paths in it were read against.
-    root = config_path.parent if config_path else pathlib.Path.cwd()
+    root = config_path.parent if config_path else cwd
 
-    specs = [rendering.resolve_template_spec(spec) for spec, _ in pairs]
+    specs = [rendering.resolve_template_spec(spec, cwd) for spec, _ in pairs]
     # Most specific first: what the user asked for by -I, then the directory a
     # template was named by path from, and the working directory only as a
     # last resort before the built-ins.
     search_dirs = [pathlib.Path(d) for d in args.template_dir]
     search_dirs += [d for d, _ in specs if d is not None]
-    search_dirs.append(pathlib.Path.cwd())
+    search_dirs.append(cwd)
 
     env = rendering.build_environment(search_dirs)
     function_template = rendering.load_template(
@@ -659,10 +659,10 @@ def run(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, cwd: pathlib.Path | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     try:
-        return run(args)
+        return run(args, cwd if cwd is not None else pathlib.Path.cwd())
     except Cmake2mdError as exc:
         print(f'cmake2md: error: {exc}', file=sys.stderr)
         return 1

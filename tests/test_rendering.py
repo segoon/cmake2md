@@ -87,17 +87,17 @@ def test_collapse_blank_lines_leaves_code_fences_alone():
 def test_resolve_template_spec_for_a_path(tmp_path):
     template = tmp_path / 'layout.md.jinja'
     template.write_text('x')
-    assert rendering.resolve_template_spec(str(template)) == (
+    assert rendering.resolve_template_spec(str(template), tmp_path) == (
         tmp_path,
         'layout.md.jinja',
     )
 
 
-def test_resolve_template_spec_for_a_name(tmp_path, monkeypatch):
+def test_resolve_template_spec_for_a_name(tmp_path):
     # A name that is not an existing file is looked up in the search path
-    # instead, so this must not depend on the working directory.
-    monkeypatch.chdir(tmp_path)
-    assert rendering.resolve_template_spec('function.md.jinja') == (
+    # instead; tmp_path stands in for the working directory here, empty, so
+    # this cannot accidentally pass because of some unrelated file there.
+    assert rendering.resolve_template_spec('function.md.jinja', tmp_path) == (
         None,
         'function.md.jinja',
     )
